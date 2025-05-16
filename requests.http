@@ -1,0 +1,11 @@
+PUT http://localhost:8080/tasks/demo
+Content-Type: application/json
+
+{
+  "messages": [
+    { "role": "system", "content": "foo" },
+    { "role": "user", "content": "bar" },
+    { "role": "user", "content": "baz" }
+  ],
+  "max_tokens": 500
+}

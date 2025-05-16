@@ -1,0 +1,65 @@
+[
+  {
+    "id": "1",
+    "provider": "vertex",
+    "api_key": "1234567890",
+    "max_concurrency": 8,
+    "models": [
+      {
+        "name": "gemini-2.5-pro"
+      },
+      {
+        "name": "gemini-2.5-flash"
+      },
+      {
+        "name": "gemini-2.5-preview",
+        "no_batching": true
+      }
+    ],
+    "instances": [
+      {
+        "region": "us-central1"
+      },
+      {
+        "region": "europe-west4"
+      },
+      {
+        "region": "asia-southeast1"
+      }
+    ]
+  },
+  {
+    "id": "2",
+    "provider": "openai",
+    "api_key": "1234567890",
+    "models": [
+      {
+        "name": "gpt-4o-mini",
+        "enqueued_token_limit": 10000
+      },
+      {
+        "name": "gpt-4o",
+        "enqueued_token_limit": 10000
+      },
+      {
+        "name": "gpt-o4-high",
+        "no_batching": true,
+        "enqueued_token_limit": 10000
+      }
+    ],
+    "instances": [
+      {
+        "region": "westus",
+        "models": [
+          {
+            "name": "gpt-4o-mini",
+            "enqueued_token_limit": 5000
+          }
+        ]
+      },
+      {
+        "region": "swedencentral"
+      }
+    ]
+  }
+]
