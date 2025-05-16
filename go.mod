@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.38.5
 	github.com/aws/smithy-go v1.22.2
 	github.com/eser/ajan v0.6.23
+	github.com/google/go-querystring v1.1.0
 )
 
 require (
