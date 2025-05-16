@@ -13,12 +13,15 @@ import (
 
 var ErrDispatchTaskBeforeInit = errors.New("called dispatch task before init")
 
+type ServiceContext struct {
+	taskQueueURL *string
+}
+
 type Service struct {
 	Config   *Config
+	Context  *ServiceContext
 	logger   *logfx.Logger
 	sqsQueue *sqs_queue.Queue
-
-	taskQueueURL *string
 }
 
 func NewService(config *Config, logger *logfx.Logger, sqsQueue *sqs_queue.Queue) *Service {
@@ -26,13 +29,13 @@ func NewService(config *Config, logger *logfx.Logger, sqsQueue *sqs_queue.Queue)
 }
 
 func (s *Service) Init(taskQueueURL string) error {
-	s.taskQueueURL = &taskQueueURL
+	s.Context = &ServiceContext{taskQueueURL: &taskQueueURL}
 
 	return nil
 }
 
 func (s *Service) DispatchTask(ctx context.Context, task Task) error {
-	if s.taskQueueURL == nil {
+	if s.Context == nil {
 		return ErrDispatchTaskBeforeInit
 	}
 
@@ -53,7 +56,7 @@ func (s *Service) DispatchTask(ctx context.Context, task Task) error {
 		return fmt.Errorf("failed to marshal task: %w", err)
 	}
 
-	err = s.sqsQueue.SendMessage(ctx, *s.taskQueueURL, string(taskJSON))
+	err = s.sqsQueue.SendMessage(ctx, *s.Context.taskQueueURL, string(taskJSON))
 	if err != nil {
 		return fmt.Errorf("failed to send message to task queue: %w", err)
 	}

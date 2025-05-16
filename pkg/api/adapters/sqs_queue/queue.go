@@ -46,7 +46,25 @@ func (q *Queue) Init(ctx context.Context) {
 	q.client = sqs.NewFromConfig(cfg, sqsClientOptions...)
 }
 
+func (q *Queue) GetQueueURL(ctx context.Context, queueName string) (*string, error) {
+	q.logger.DebugContext(ctx, "GetQueueURL is trying to get queue url", "queueName", queueName)
+	queueURLOut, err := q.client.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
+		QueueName: aws.String(queueName),
+	})
+
+	if err != nil {
+		if strings.HasSuffix(err.Error(), "AWS.SimpleQueueService.NonExistentQueue: The specified queue does not exist.") {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	return queueURLOut.QueueUrl, nil
+}
+
 func (q *Queue) ListQueues(ctx context.Context) ([]string, error) {
+	q.logger.DebugContext(ctx, "ListQueues is trying to list queues")
 	listOut, err := q.client.ListQueues(ctx, &sqs.ListQueuesInput{})
 	if err != nil {
 		return nil, err
@@ -55,23 +73,8 @@ func (q *Queue) ListQueues(ctx context.Context) ([]string, error) {
 	return listOut.QueueUrls, nil
 }
 
-func (q *Queue) GetQueueURLByName(ctx context.Context, queueName string) (*string, error) {
-	queueURLs, err := q.ListQueues(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, queueURL := range queueURLs {
-		// check last segment of queueURL is equal to queueName
-		if strings.Split(queueURL, "/")[len(strings.Split(queueURL, "/"))-1] == queueName {
-			return &queueURL, nil
-		}
-	}
-
-	return nil, nil
-}
-
 func (q *Queue) CreateQueue(ctx context.Context, queueName string) (*string, error) {
+	q.logger.DebugContext(ctx, "CreateQueue is trying to create queue", "queueName", queueName)
 	createOut, err := q.client.CreateQueue(ctx, &sqs.CreateQueueInput{
 		QueueName: aws.String(queueName),
 	})
@@ -84,12 +87,14 @@ func (q *Queue) CreateQueue(ctx context.Context, queueName string) (*string, err
 }
 
 func (q *Queue) CreateQueueIfNotExists(ctx context.Context, queueName string) (*string, error) {
-	queueURL, err := q.GetQueueURLByName(ctx, queueName)
+	q.logger.DebugContext(ctx, "CreateQueueIfNotExists is trying to get queue url to find out if queue exists", "queueName", queueName)
+	queueURL, err := q.GetQueueURL(ctx, queueName)
 	if err != nil {
 		return nil, err
 	}
 
 	if queueURL == nil {
+		q.logger.DebugContext(ctx, "CreateQueueIfNotExists couldn't find queue, creating", "queueName", queueName)
 		return q.CreateQueue(ctx, queueName)
 	}
 
@@ -97,6 +102,7 @@ func (q *Queue) CreateQueueIfNotExists(ctx context.Context, queueName string) (*
 }
 
 func (q *Queue) SendMessage(ctx context.Context, queueURL string, message string) error {
+	q.logger.DebugContext(ctx, "SendMessage is trying to send message", "queueURL", queueURL)
 	sendMessageInput := &sqs.SendMessageInput{
 		QueueUrl:    aws.String(queueURL),
 		MessageBody: aws.String(message),
@@ -112,6 +118,7 @@ func (q *Queue) SendMessage(ctx context.Context, queueURL string, message string
 }
 
 func (q *Queue) ReceiveMessage(ctx context.Context, queueURL string) (string, error) {
+	q.logger.DebugContext(ctx, "ReceiveMessage is trying to receive message", "queueURL", queueURL)
 	receiveOut, err := q.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 		QueueUrl: aws.String(queueURL),
 	})
