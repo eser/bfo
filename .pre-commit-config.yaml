@@ -63,6 +63,7 @@ repos:
         exclude: |
           (?x)^(
             .github/.*|
+            ops/docker/resources/fluentd/Dockerfile|
             ops/docker/Dockerfile|
             .pre-commit-config.yaml|
             .tool-versions|

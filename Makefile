@@ -102,5 +102,13 @@ fix: ## Fixes code formatting and alignment.
 	go tool betteralign -apply ./...
 	go fmt ./...
 
+.PHONY: ls-start
+ls-start: ## Starts the localstack container.
+	docker compose --file ./ops/docker/compose.yml up --detach localstack
+
+.PHONY: ls-stop
+ls-stop: ## Stops the localstack container.
+	docker compose --file ./ops/docker/compose.yml stop localstack
+
 %:
 	@:
