@@ -113,5 +113,23 @@ func (a *AppContext) Run(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
 
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				a.Logger.Info("Shutting down task processing")
+				return
+			default:
+				err := a.Tasks.ProcessNextTask(ctx, func(ctx context.Context, task tasks.Task) error {
+					a.Logger.InfoContext(ctx, "Processing task", "task", task)
+					return nil
+				})
+				if err != nil {
+					a.Logger.ErrorContext(ctx, "Failed to process task", "error", err)
+				}
+			}
+		}
+	}()
+
 	return nil
 }

@@ -7,6 +7,7 @@ type Config struct {
 
 	TaskQueueName string `conf:"TASK_QUEUE_NAME" default:"test-queue"`
 
-	WaitTimeSeconds   int32 `conf:"WAIT_TIME_SECONDS" default:"10"`
-	VisibilityTimeout int32 `conf:"VISIBILITY_TIMEOUT" default:"30"`
+	MaxNumberOfMessages int32 `conf:"MAX_NUMBER_OF_MESSAGES" default:"10"`
+	WaitTimeSeconds     int32 `conf:"WAIT_TIME_SECONDS" default:"10"`
+	VisibilityTimeout   int32 `conf:"VISIBILITY_TIMEOUT" default:"30"`
 }

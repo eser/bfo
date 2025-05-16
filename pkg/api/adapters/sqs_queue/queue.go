@@ -17,6 +17,11 @@ type Queue struct {
 	client *sqs.Client
 }
 
+type Message struct {
+	Body          string
+	ReceiptHandle string
+}
+
 func New(config *Config, logger *logfx.Logger) *Queue {
 	return &Queue{Config: config, logger: logger}
 }
@@ -117,28 +122,34 @@ func (q *Queue) SendMessage(ctx context.Context, queueURL string, message string
 	return nil
 }
 
-func (q *Queue) ReceiveMessage(ctx context.Context, queueURL string) (string, string, error) {
-	q.logger.DebugContext(ctx, "ReceiveMessage is trying to receive message", "queueURL", queueURL)
+func (q *Queue) ReceiveMessages(ctx context.Context, queueURL string) ([]Message, error) {
+	q.logger.DebugContext(ctx, "ReceiveMessages is trying to receive messages", "queueURL", queueURL)
 	receiveOut, err := q.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(queueURL),
-		MaxNumberOfMessages: 1,
+		MaxNumberOfMessages: q.Config.MaxNumberOfMessages,
 		WaitTimeSeconds:     q.Config.WaitTimeSeconds,
 		VisibilityTimeout:   q.Config.VisibilityTimeout,
 	})
 	if err != nil {
-		q.logger.ErrorContext(ctx, "ReceiveMessage failed", "error", err)
-		return "", "", err
+		q.logger.ErrorContext(ctx, "ReceiveMessages failed", "error", err)
+		return nil, err
 	}
 
-	if len(receiveOut.Messages) == 0 {
-		q.logger.DebugContext(ctx, "ReceiveMessage received no messages")
-		return "", "", nil
+	messages := make([]Message, len(receiveOut.Messages))
+	if len(messages) == 0 {
+		q.logger.DebugContext(ctx, "ReceiveMessages received no messages")
+		return messages, nil
 	}
 
-	message := receiveOut.Messages[0]
+	for i, message := range receiveOut.Messages {
+		messages[i] = Message{
+			Body:          *message.Body,
+			ReceiptHandle: *message.ReceiptHandle,
+		}
+	}
 
-	q.logger.DebugContext(ctx, "ReceiveMessage received message", "message", *message.Body, "receiptHandle", *message.ReceiptHandle)
-	return *message.Body, *message.ReceiptHandle, nil
+	q.logger.DebugContext(ctx, "ReceiveMessages received messages", "messages", messages)
+	return messages, nil
 }
 
 func (q *Queue) DeleteMessage(ctx context.Context, queueURL string, receiptHandle string) error {
