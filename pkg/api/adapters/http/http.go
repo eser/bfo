@@ -14,6 +14,7 @@ import (
 
 func Run(
 	ctx context.Context,
+	cancel context.CancelFunc,
 	appContext *appcontext.AppContext,
 ) error {
 	routes := httpfx.NewRouter("/")
@@ -49,6 +50,7 @@ func Run(
 	defer cleanup()
 
 	lib.WaitForSignal()
+	cancel()
 
 	return nil
 }

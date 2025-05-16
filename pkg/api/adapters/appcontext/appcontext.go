@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 
 	"github.com/eser/ajan/configfx"
 	"github.com/eser/ajan/logfx"
@@ -29,6 +30,8 @@ type AppContext struct {
 
 	Resources *resources.Service
 	Tasks     *tasks.Service
+
+	wg sync.WaitGroup
 }
 
 func NewAppContext(ctx context.Context) (*AppContext, error) {
@@ -113,23 +116,50 @@ func (a *AppContext) Run(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
 
+	a.wg.Add(1)
 	go func() {
+		defer a.wg.Done()
+		a.Logger.InfoContext(ctx, "Task processing goroutine started.")
+
 		for {
 			select {
 			case <-ctx.Done():
-				a.Logger.Info("Shutting down task processing")
+				a.Logger.InfoContext(ctx, "Task processing goroutine shutting down due to context cancellation.")
 				return
 			default:
-				err := a.Tasks.ProcessNextTask(ctx, func(ctx context.Context, task tasks.Task) error {
-					a.Logger.InfoContext(ctx, "Processing task", "task", task)
+				processErr := a.Tasks.ProcessNextTask(ctx, func(innerCtx context.Context, task tasks.Task) error {
+					a.Logger.InfoContext(innerCtx, "Processing task", "task", task)
 					return nil
 				})
-				if err != nil {
-					a.Logger.ErrorContext(ctx, "Failed to process task", "error", err)
+				if processErr != nil {
+					// don't log an error if it's just the context being cancelled during shutdown.
+					if !errors.Is(processErr, context.Canceled) && !errors.Is(processErr, context.DeadlineExceeded) {
+						a.Logger.ErrorContext(ctx, "Failed to process task", "error", processErr)
+					} else {
+						// if it's a cancellation error, it might be normal during shutdown.
+						a.Logger.InfoContext(ctx, "Task processing cycle interrupted by context", "error", processErr)
+					}
 				}
 			}
 		}
 	}()
 
 	return nil
+}
+
+func (a *AppContext) WaitForShutdown(shutdownCtx context.Context) {
+	a.Logger.InfoContext(shutdownCtx, "AppContext: Waiting for services to shut down...")
+
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		a.wg.Wait()
+	}()
+
+	select {
+	case <-doneCh:
+		a.Logger.InfoContext(shutdownCtx, "AppContext: All services shut down gracefully.")
+	case <-shutdownCtx.Done():
+		a.Logger.ErrorContext(shutdownCtx, "AppContext: Shutdown timed out waiting for services.", "error", shutdownCtx.Err())
+	}
 }

@@ -2,6 +2,7 @@ package sqs_queue
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -131,6 +132,11 @@ func (q *Queue) ReceiveMessages(ctx context.Context, queueURL string) ([]Message
 		VisibilityTimeout:   q.Config.VisibilityTimeout,
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			q.logger.InfoContext(ctx, "ReceiveMessages context was canceled")
+			return nil, nil
+		}
+
 		q.logger.ErrorContext(ctx, "ReceiveMessages failed", "error", err)
 		return nil, err
 	}
