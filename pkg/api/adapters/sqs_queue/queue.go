@@ -117,18 +117,41 @@ func (q *Queue) SendMessage(ctx context.Context, queueURL string, message string
 	return nil
 }
 
-func (q *Queue) ReceiveMessage(ctx context.Context, queueURL string) (string, error) {
+func (q *Queue) ReceiveMessage(ctx context.Context, queueURL string) (string, string, error) {
 	q.logger.DebugContext(ctx, "ReceiveMessage is trying to receive message", "queueURL", queueURL)
 	receiveOut, err := q.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
-		QueueUrl: aws.String(queueURL),
+		QueueUrl:            aws.String(queueURL),
+		MaxNumberOfMessages: 1,
+		WaitTimeSeconds:     q.Config.WaitTimeSeconds,
+		VisibilityTimeout:   q.Config.VisibilityTimeout,
 	})
 	if err != nil {
-		return "", err
+		q.logger.ErrorContext(ctx, "ReceiveMessage failed", "error", err)
+		return "", "", err
 	}
 
 	if len(receiveOut.Messages) == 0 {
-		return "", nil
+		q.logger.DebugContext(ctx, "ReceiveMessage received no messages")
+		return "", "", nil
 	}
 
-	return *receiveOut.Messages[0].Body, nil
+	message := receiveOut.Messages[0]
+
+	q.logger.DebugContext(ctx, "ReceiveMessage received message", "message", *message.Body, "receiptHandle", *message.ReceiptHandle)
+	return *message.Body, *message.ReceiptHandle, nil
+}
+
+func (q *Queue) DeleteMessage(ctx context.Context, queueURL string, receiptHandle string) error {
+	q.logger.DebugContext(ctx, "DeleteMessage is trying to delete message", "queueURL", queueURL, "receiptHandle", receiptHandle)
+	_, err := q.client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+		QueueUrl:      aws.String(queueURL),
+		ReceiptHandle: aws.String(receiptHandle),
+	})
+	if err != nil {
+		q.logger.ErrorContext(ctx, "DeleteMessage failed", "error", err)
+		return err
+	}
+
+	q.logger.InfoContext(ctx, "Message deleted", "receiptHandle", receiptHandle)
+	return nil
 }

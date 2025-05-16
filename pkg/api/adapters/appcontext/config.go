@@ -17,8 +17,9 @@ type FeatureFlags struct {
 type AppConfig struct {
 	SqsQueue sqs_queue.Config `conf:"SQS_QUEUE"`
 
-	Tasks tasks.Config `conf:"TASKS"`
 	ajan.BaseConfig
+
+	Tasks tasks.Config `conf:"TASKS"`
 
 	// Externals Externals `conf:"EXTERNALS"`
 	Features FeatureFlags `conf:"FEATURES"`

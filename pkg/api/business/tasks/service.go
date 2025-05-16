@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/eser/ajan/logfx"
 	"github.com/eser/bfo/pkg/api/adapters/sqs_queue"
@@ -40,12 +39,7 @@ func (s *Service) DispatchTask(ctx context.Context, task Task) error {
 	}
 
 	if task.MaxTokens == 0 {
-		maxTokensConfigValue, err := strconv.Atoi(s.Config.DefaultMaxTokens)
-		if err != nil {
-			return fmt.Errorf("failed to convert default max tokens to int: %w", err)
-		}
-
-		task.MaxTokens = maxTokensConfigValue
+		task.MaxTokens = s.Config.DefaultMaxTokens
 	}
 
 	s.logger.Info("Dispatching task", "task", task)
