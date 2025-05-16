@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/eser/bfo/pkg/api/adapters/appcontext"
 	"github.com/eser/bfo/pkg/api/adapters/http"
@@ -16,13 +15,10 @@ func main() {
 		panic(err)
 	}
 
-	appContext.Logger.InfoContext(
-		ctx,
-		"Starting service",
-		slog.String("name", appContext.Config.AppName),
-		slog.String("environment", appContext.Config.AppEnv),
-		slog.Any("features", appContext.Config.Features),
-	)
+	err = appContext.Run(ctx)
+	if err != nil {
+		panic(err)
+	}
 
 	err = http.Run(
 		ctx,

@@ -30,9 +30,9 @@ func RegisterHttpRoutesForSite( //nolint:funlen
 				// override task id
 				task.ID = idParam
 
-				service := tasks.NewService(&appContext.Config.Tasks, appContext.Logger)
+				service := tasks.NewService(&appContext.Config.Tasks, appContext.Logger, appContext.SqsQueue)
 
-				err = service.DispatchTask(task)
+				err = service.DispatchTask(ctx.Request.Context(), task)
 
 				if err != nil {
 					return ctx.Results.Error(http.StatusInternalServerError, []byte(err.Error()))

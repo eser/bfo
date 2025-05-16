@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/eser/ajan/configfx"
 	"github.com/eser/ajan/logfx"
 	"github.com/eser/ajan/metricsfx"
-	"github.com/eser/ajan/queuefx"
 
-	"github.com/eser/bfo/pkg/api/adapters/external_tool"
+	"github.com/eser/bfo/pkg/api/adapters/sqs_queue"
 	"github.com/eser/bfo/pkg/api/business/resources"
+	"github.com/eser/bfo/pkg/api/business/tasks"
 )
 
 var ErrInitFailed = errors.New("failed to initialize app context")
@@ -21,11 +22,13 @@ type AppContext struct {
 	Config  *AppConfig
 	Logger  *logfx.Logger
 	Metrics *metricsfx.MetricsProvider
-	Queue   *queuefx.Registry
+	// Queue   *queuefx.Registry
+	SqsQueue *sqs_queue.Queue
 
-	ExternalTool *external_tool.ExternalTool
+	// ExternalTool *external_tool.ExternalTool
 
 	Resources *resources.Service
+	Tasks     *tasks.Service
 }
 
 func NewAppContext(ctx context.Context) (*AppContext, error) {
@@ -55,22 +58,60 @@ func NewAppContext(ctx context.Context) (*AppContext, error) {
 		return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
 
-	// queue
-	appContext.Queue = queuefx.NewRegistry(appContext.Logger)
+	// // queue
+	// appContext.Queue = queuefx.NewRegistry(appContext.Logger)
 
-	err = appContext.Queue.LoadFromConfig(ctx, &appContext.Config.Queue)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
-	}
+	// err = appContext.Queue.LoadFromConfig(ctx, &appContext.Config.Queue)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
+	// }
 
-	appContext.ExternalTool = external_tool.New(appContext.Config.Externals.ExternalTool)
+	// // external tool
+	// appContext.ExternalTool = external_tool.New(appContext.Config.Externals.ExternalTool)
+
+	// sqs queue
+	appContext.SqsQueue = sqs_queue.New(&appContext.Config.SqsQueue, appContext.Logger)
 
 	// services
 	appContext.Resources = resources.NewService(appContext.Logger)
-	err = appContext.Resources.LoadResourcesFromFile("./etc/resources.json")
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
-	}
+	appContext.Tasks = tasks.NewService(&appContext.Config.Tasks, appContext.Logger, appContext.SqsQueue)
 
 	return appContext, nil
+}
+
+func (a *AppContext) Run(ctx context.Context) error {
+	a.Logger.InfoContext(
+		ctx,
+		"Starting application layer",
+		slog.String("name", a.Config.AppName),
+		slog.String("environment", a.Config.AppEnv),
+		slog.Any("features", a.Config.Features),
+	)
+
+	// sqs queue
+
+	a.SqsQueue.Init(ctx)
+
+	taskQueueURL, err := a.SqsQueue.CreateQueueIfNotExists(ctx, a.Config.SqsQueue.TaskQueueName)
+	if err != nil {
+		panic(err)
+	}
+
+	a.Logger.Info("Task Queue URL", "taskQueueURL", *taskQueueURL)
+
+	// resources
+
+	err = a.Resources.LoadResourcesFromFile("./etc/resources.json")
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInitFailed, err)
+	}
+
+	// tasks
+
+	err = a.Tasks.Init(*taskQueueURL)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInitFailed, err)
+	}
+
+	return nil
 }

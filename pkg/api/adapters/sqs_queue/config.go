@@ -1,0 +1,9 @@
+package sqs_queue
+
+type Config struct {
+	ConnectionEndpoint string `conf:"CONNECTION_ENDPOINT" default:"http://localhost:4566"`
+	ConnectionProfile  string `conf:"CONNECTION_PROFILE" default:"default"`
+	ConnectionRegion   string `conf:"CONNECTION_REGION" default:"eu-west-1"`
+
+	TaskQueueName string `conf:"TASK_QUEUE_NAME" default:"test-queue"`
+}

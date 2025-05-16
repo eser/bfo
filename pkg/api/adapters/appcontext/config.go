@@ -2,7 +2,7 @@ package appcontext
 
 import (
 	"github.com/eser/ajan"
-	"github.com/eser/bfo/pkg/api/adapters/external_tool"
+	"github.com/eser/bfo/pkg/api/adapters/sqs_queue"
 	"github.com/eser/bfo/pkg/api/business/tasks"
 )
 
@@ -10,15 +10,16 @@ type FeatureFlags struct {
 	Dummy bool `conf:"DUMMY" default:"false"` // dummy feature flag
 }
 
-type Externals struct {
-	ExternalTool external_tool.Config `conf:"EXTERNAL_TOOL"`
-}
+// type Externals struct {
+// 	ExternalTool external_tool.Config `conf:"EXTERNAL_TOOL"`
+// }
 
 type AppConfig struct {
-	Externals Externals `conf:"EXTERNALS"`
+	SqsQueue sqs_queue.Config `conf:"SQS_QUEUE"`
 
 	Tasks tasks.Config `conf:"TASKS"`
 	ajan.BaseConfig
 
+	// Externals Externals `conf:"EXTERNALS"`
 	Features FeatureFlags `conf:"FEATURES"`
 }
