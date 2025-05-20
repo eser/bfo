@@ -66,7 +66,7 @@ func NewAppContext() (*AppContext, error) {
 	appContext.DynamoDbStore = dynamodb_store.New(&appContext.Config.DynamoDbStore, appContext.Logger)
 
 	// resources
-	appContext.Resources = resources.NewService(&appContext.Config.Resources, appContext.Logger)
+	appContext.Resources = resources.NewService(&appContext.Config.Resources, appContext.Logger, appContext.DynamoDbStore) // Use consolidated store
 	appContext.Resources.AddProvider("openai", func(config *resources.ConfigResource) resources.Provider {
 		return providers.NewOpenAiClient(config, appContext.Logger)
 	})
@@ -75,7 +75,7 @@ func NewAppContext() (*AppContext, error) {
 	})
 
 	// tasks
-	appContext.Tasks = tasks.NewService(&appContext.Config.Tasks, appContext.Logger, appContext.SqsQueue)
+	appContext.Tasks = tasks.NewService(&appContext.Config.Tasks, appContext.Logger, appContext.SqsQueue, appContext.DynamoDbStore)
 
 	return appContext, nil
 }

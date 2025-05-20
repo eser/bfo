@@ -8,8 +8,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
-	"path/filepath"
 
 	"github.com/eser/ajan/logfx"
 	"github.com/eser/bfo/pkg/api/business/resources"
@@ -65,14 +63,8 @@ func (c *OpenAiClient) do(req *http.Request, v any) error {
 }
 
 // CreateFile uploads a file that can be used across OpenAI services.
-// The file path provided should be an absolute path or relative to the execution directory.
-func (c *OpenAiClient) CreateFile(ctx context.Context, filePath string, purpose string) (*resources.File, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file %s: %w", filePath, err)
-	}
-	defer file.Close() //nolint:errcheck
-
+// It now accepts content as bytes and a filename.
+func (c *OpenAiClient) CreateFile(ctx context.Context, fileName string, content []byte, purpose string) (*resources.File, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -82,11 +74,11 @@ func (c *OpenAiClient) CreateFile(ctx context.Context, filePath string, purpose 
 	}
 
 	// Add file field
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	part, err := writer.CreateFormFile("file", fileName) // Use the provided fileName
 	if err != nil {
 		return nil, fmt.Errorf("failed to create form file: %w", err)
 	}
-	_, err = io.Copy(part, file)
+	_, err = io.Copy(part, bytes.NewReader(content)) // Use bytes.NewReader for content
 	if err != nil {
 		return nil, fmt.Errorf("failed to copy file content: %w", err)
 	}
@@ -107,6 +99,36 @@ func (c *OpenAiClient) CreateFile(ctx context.Context, filePath string, purpose 
 		return nil, err
 	}
 	return &resultFile, nil
+}
+
+// GetFileContent retrieves the content of a specific file from OpenAI.
+func (c *OpenAiClient) GetFileContent(ctx context.Context, fileId string) ([]byte, error) {
+	path := fmt.Sprintf("/files/%s/content", fileId)
+
+	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for getting file content: %w", err)
+	}
+
+	// The OpenAI API for file content might return it directly, not as JSON.
+	// So, we handle the response differently from the standard `do` method.
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request for getting file content: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("api request for file content failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	content, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file content from response: %w", err)
+	}
+
+	return content, nil
 }
 
 // CreateBatch creates and executes a batch from an uploaded file.

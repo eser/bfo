@@ -8,8 +8,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
-	"path/filepath"
 
 	"github.com/eser/ajan/logfx"
 	"github.com/eser/bfo/pkg/api/business/resources"
@@ -46,15 +44,8 @@ func (c *EchoClient) do(req *http.Request, _v any) error {
 	return nil
 }
 
-// CreateFile uploads a file that can be used across OpenAI services.
-// The file path provided should be an absolute path or relative to the execution directory.
-func (c *EchoClient) CreateFile(ctx context.Context, filePath string, purpose string) (*resources.File, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file %s: %w", filePath, err)
-	}
-	defer file.Close() //nolint:errcheck
-
+// CreateFile uploads content to be used across OpenAI services.
+func (c *EchoClient) CreateFile(ctx context.Context, fileName string, content []byte, purpose string) (*resources.File, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -64,11 +55,11 @@ func (c *EchoClient) CreateFile(ctx context.Context, filePath string, purpose st
 	}
 
 	// Add file field
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	part, err := writer.CreateFormFile("file", fileName) // Use fileName passed as argument
 	if err != nil {
 		return nil, fmt.Errorf("failed to create form file: %w", err)
 	}
-	_, err = io.Copy(part, file)
+	_, err = io.Copy(part, bytes.NewReader(content)) // Use content passed as argument
 	if err != nil {
 		return nil, fmt.Errorf("failed to copy file content: %w", err)
 	}
@@ -89,6 +80,14 @@ func (c *EchoClient) CreateFile(ctx context.Context, filePath string, purpose st
 		return nil, err
 	}
 	return &resultFile, nil
+}
+
+// GetFileContent retrieves the content of a specific file.
+// Note: EchoClient is a mock and might not have a real file store.
+// This implementation will return an error indicating it's not implemented.
+func (c *EchoClient) GetFileContent(ctx context.Context, fileId string) ([]byte, error) {
+	c.logger.Warn("[EchoClient] GetFileContent called, but it's not implemented for EchoClient", "module", "providers", "file_id", fileId)
+	return nil, fmt.Errorf("GetFileContent is not implemented for EchoClient")
 }
 
 // CreateBatch creates and executes a batch from an uploaded file.

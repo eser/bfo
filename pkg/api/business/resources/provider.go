@@ -92,9 +92,10 @@ type ListBatchesParams struct {
 }
 
 type Provider interface {
-	CreateFile(ctx context.Context, filePath string, purpose string) (*File, error)
+	CreateFile(ctx context.Context, fileName string, content []byte, purpose string) (*File, error) // Modified signature
 	CreateBatch(ctx context.Context, batchReq CreateBatchRequest) (*Batch, error)
 	RetrieveBatch(ctx context.Context, batchId string) (*Batch, error)
 	CancelBatch(ctx context.Context, batchId string) (*Batch, error)
 	ListBatches(ctx context.Context, params *ListBatchesParams) (*ListBatchesResponse, error)
+	GetFileContent(ctx context.Context, fileId string) ([]byte, error) // Added method
 }

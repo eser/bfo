@@ -15,10 +15,10 @@ type ConfigResourceInstance struct {
 
 	Region string `conf:"REGION"`
 
-	MaxConcurrency     int `conf:"MAX_CONCURRENCY"`
-	MaxTokenPerBatch   int `conf:"MAX_TOKEN_PER_BATCH"`
-	MaxRequestPerBatch int `conf:"MAX_REQUEST_PER_BATCH"`
-	EnqueuedTokenLimit int `conf:"ENQUEUED_TOKEN_LIMIT"`
+	MaxConcurrency     int   `conf:"MAX_CONCURRENCY"`
+	MaxTokensPerBatch  int64 `conf:"MAX_TOKENS_PER_BATCH"`
+	MaxRequestPerBatch int   `conf:"MAX_REQUEST_PER_BATCH"`
+	EnqueuedTokenLimit int   `conf:"ENQUEUED_TOKEN_LIMIT"`
 }
 
 type ConfigResource struct {
@@ -30,8 +30,13 @@ type ConfigResource struct {
 	ApiKey   string `conf:"API_KEY"`
 	BaseUrl  string `conf:"BASE_URL" default:"https://api.openai.com/v1"`
 
+	// New fields for batching and model configuration
+	Model         string `conf:"MODEL"`          // e.g., "gpt-3.5-turbo"
+	BatchEndpoint string `conf:"BATCH_ENDPOINT"` // e.g., "/v1/chat/completions"
+
 	MaxConcurrency     int           `conf:"MAX_CONCURRENCY"`
-	MaxTokenPerBatch   int           `conf:"MAX_TOKEN_PER_BATCH"`
+	TokensPerMinute    int64         `conf:"TOKENS_PER_MINUTE"` // Added for rate limiting
+	MaxTokensPerBatch  int64         `conf:"MAX_TOKENS_PER_BATCH"`
 	MaxRequestPerBatch int           `conf:"MAX_REQUEST_PER_BATCH"`
 	RequestTimeout     time.Duration `conf:"REQUEST_TIMEOUT" default:"30s"`
 	EnqueuedTokenLimit int           `conf:"ENQUEUED_TOKEN_LIMIT"`
