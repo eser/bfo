@@ -61,7 +61,7 @@ func (s *Service) DispatchTask(ctx context.Context, task Task) error {
 		task.MaxTokens = s.Config.DefaultMaxTokens
 	}
 
-	s.logger.Info("Dispatching task", "task", task)
+	s.logger.Info("[Tasks] Dispatching task", "module", "tasks", "task", task)
 
 	// marshal task to json
 	taskJSON, err := json.Marshal(task)
@@ -92,38 +92,38 @@ func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Conte
 			var task Task
 			err = json.Unmarshal([]byte(message.Body), &task)
 			if err != nil {
-				s.logger.ErrorContext(ctx, "Failed to unmarshal task", "message", message.Body, "error", err)
+				s.logger.ErrorContext(ctx, "[Tasks] Failed to unmarshal task", "module", "tasks", "message", message.Body, "error", err)
 
 				return
 			}
 
 			// TODO(@eser) mark task as in progress
-			s.logger.InfoContext(ctx, "Processing task", "task", task.Id)
+			s.logger.InfoContext(ctx, "[Tasks] Processing task", "module", "tasks", "task", task.Id)
 
 			taskResult, err := fn(ctx, task)
 
 			// TODO(@eser) update task status depending on taskResult
 
 			if err != nil {
-				s.logger.ErrorContext(ctx, "Failed to execute process function", "task", task.Id, "error", err)
+				s.logger.ErrorContext(ctx, "[Tasks] Failed to execute process function", "module", "tasks", "task", task.Id, "error", err)
 
 				return
 			}
 
 			if taskResult == TaskResultSystemTemporarilyFailed {
-				s.logger.InfoContext(ctx, "Task failed temporarily, sleeping for 5 seconds", "task", task.Id)
+				s.logger.InfoContext(ctx, "[Tasks] Task failed temporarily, sleeping for 5 seconds", "module", "tasks", "task", task.Id)
 				time.Sleep(5 * time.Second)
 
 				return
 			}
 
 			if taskResult == TaskResultSuccess {
-				s.logger.InfoContext(ctx, "Task completed successfully", "task", task.Id)
+				s.logger.InfoContext(ctx, "[Tasks] Task completed successfully", "module", "tasks", "task", task.Id)
 
 				err = s.sqsQueue.DeleteMessage(ctx, *s.Context.taskQueueURL, message.ReceiptHandle)
 
 				if err != nil {
-					s.logger.ErrorContext(ctx, "Failed to delete message from task queue", "receiptHandle", message.ReceiptHandle, "error", err)
+					s.logger.ErrorContext(ctx, "[Tasks] Failed to delete message from task queue", "module", "tasks", "receiptHandle", message.ReceiptHandle, "error", err)
 
 					return
 				}

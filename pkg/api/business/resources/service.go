@@ -69,6 +69,7 @@ func (s *Service) FindBestAvailableResource(ctx context.Context, task tasks.Task
 	for key, resource := range s.resources {
 		s.logger.DebugContext(ctx, "[Resources] Checking resource", "module", "resources", "resource", key)
 
+		// TODO(@eser): try to estimate tokens needed for task, then check best resource available
 		if true { // resource.IsAvailable()
 			s.logger.DebugContext(ctx, "[Resources] Found available resource", "module", "resources", "resource", resource)
 
@@ -77,6 +78,20 @@ func (s *Service) FindBestAvailableResource(ctx context.Context, task tasks.Task
 	}
 
 	return nil, nil
+}
+
+func (s *Service) DispatchTask(ctx context.Context, resource Provider, task tasks.Task) (*Batch, error) {
+	batch, err := resource.CreateBatch(ctx, CreateBatchRequest{})
+
+	if err != nil {
+		s.logger.ErrorContext(ctx, "[Resources] Failed to create batch", "module", "resources", "task", task, "error", err)
+
+		return nil, fmt.Errorf("failed to create batch: %w", err)
+	}
+
+	// TODO(@eser) calculate tokens spent, then update resource instance state
+
+	return batch, nil
 }
 
 func (s *Service) ProcessTask(ctx context.Context, task tasks.Task) (tasks.TaskResult, error) {
@@ -93,7 +108,7 @@ func (s *Service) ProcessTask(ctx context.Context, task tasks.Task) (tasks.TaskR
 		return tasks.TaskResultSystemTemporarilyFailed, nil
 	}
 
-	batch, err := provider.CreateBatch(ctx, CreateBatchRequest{})
+	batch, err := s.DispatchTask(ctx, provider, task)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[Resources] Failed to create batch", "module", "resources", "task", task, "error", err)
 		// return fmt.Errorf("failed to create batch: %w", err)

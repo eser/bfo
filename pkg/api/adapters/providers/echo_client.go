@@ -40,8 +40,8 @@ func (c *EchoClient) newRequest(ctx context.Context, method, path string, body i
 	return req, nil
 }
 
-func (c *EchoClient) do(req *http.Request, v any) error {
-	c.logger.Info("[EchoClient] Sending request", "method", req.Method, "url", req.URL.String())
+func (c *EchoClient) do(req *http.Request, _v any) error {
+	c.logger.Info("[EchoClient] Sending request", "module", "providers", "method", req.Method, "url", req.URL.String())
 
 	return nil
 }

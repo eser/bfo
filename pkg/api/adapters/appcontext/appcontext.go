@@ -24,7 +24,7 @@ type AppContext struct {
 	Config  *AppConfig
 	Logger  *logfx.Logger
 	Metrics *metricsfx.MetricsProvider
-	// Queue   *queuefx.Registry
+
 	SqsQueue      *sqs_queue.Queue
 	DynamoDbStore *dynamodb_store.Store
 
@@ -59,9 +59,6 @@ func NewAppContext() (*AppContext, error) {
 		return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
 
-	// // queue
-	// appContext.Queue = queuefx.NewRegistry(appContext.Logger)
-
 	// sqs queue
 	appContext.SqsQueue = sqs_queue.New(&appContext.Config.SqsQueue, appContext.Logger)
 
@@ -70,9 +67,6 @@ func NewAppContext() (*AppContext, error) {
 
 	// resources
 	appContext.Resources = resources.NewService(&appContext.Config.Resources, appContext.Logger)
-	appContext.Resources.AddProvider("mock", func(config *resources.ConfigResource) resources.Provider {
-		return &providers.MockClient{}
-	})
 	appContext.Resources.AddProvider("openai", func(config *resources.ConfigResource) resources.Provider {
 		return providers.NewOpenAiClient(config, appContext.Logger)
 	})
@@ -89,17 +83,12 @@ func NewAppContext() (*AppContext, error) {
 func (a *AppContext) Init(ctx context.Context) error {
 	a.Logger.InfoContext(
 		ctx,
-		"Starting application layer",
+		"[AppContext] Starting application layer",
+		slog.String("module", "appcontext"),
 		slog.String("name", a.Config.AppName),
 		slog.String("environment", a.Config.AppEnv),
 		slog.Any("features", a.Config.Features),
 	)
-
-	// queue
-	// err = appContext.Queue.LoadFromConfig(ctx, &appContext.Config.Queue)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
-	// }
 
 	// dynamodb store
 
@@ -129,33 +118,21 @@ func (a *AppContext) Init(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
 
-	// err = a.DynamoDbStore.PutWorkerPoolState(ctx, &worker_pools.WorkerPoolState{
-	// 	PoolId: "default",
-	// 	State:  []byte("non-default"),
-	// })
-	// if err != nil {
-	// 	return fmt.Errorf("%w: %w", ErrInitFailed, err)
-	// }
-
-	// state, err := a.DynamoDbStore.GetWorkerPoolState(ctx, "default")
-	// a.Logger.InfoContext(ctx, "Worker pool state", "state", string(state.State))
-	// if err != nil {
-	// 	return fmt.Errorf("%w: %w", ErrInitFailed, err)
-	// }
-
 	return nil
 }
 
 func (a *AppContext) Tick(ctx context.Context) error {
-	err := a.Tasks.ProcessNextTask(ctx, func(innerCtx context.Context, task tasks.Task) (tasks.TaskResult, error) {
+	fn := func(innerCtx context.Context, task tasks.Task) (tasks.TaskResult, error) {
 		taskResult, err := a.Resources.ProcessTask(innerCtx, task)
 
 		if err != nil {
-			return tasks.TaskResultSystemPermanentlyFailed, fmt.Errorf("failed to process task: %w", err)
+			return tasks.TaskResultSystemPermanentlyFailed, fmt.Errorf("failed to process task '%s': %w", task.Id, err)
 		}
 
 		return taskResult, nil
-	})
+	}
+
+	err := a.Tasks.ProcessNextTask(ctx, fn)
 
 	return err
 }

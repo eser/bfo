@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/eser/ajan/logfx"
-	"github.com/eser/bfo/pkg/api/business/worker_pools"
+	"github.com/eser/bfo/pkg/api/business/resources"
 )
 
 type Store struct {
@@ -43,7 +43,7 @@ func (s *Store) Init(ctx context.Context) error {
 
 	sdkConfig, err := config.LoadDefaultConfig(ctx, cfgOptions...)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "unable to load SDK config for DynamoDb", "error", err)
+		s.logger.ErrorContext(ctx, "[DynamoDbStore] unable to load SDK config for DynamoDb", "error", err)
 
 		return fmt.Errorf("failed to load AWS SDK config: %w", err)
 	}
@@ -51,20 +51,20 @@ func (s *Store) Init(ctx context.Context) error {
 	s.client = dynamodb.NewFromConfig(sdkConfig, ddbClientOptions...)
 
 	if err := s.CreateTableIfNotExists(ctx, s.Config.TableName); err != nil {
-		s.logger.ErrorContext(ctx, "Failed to ensure DynamoDb table exists during init", "tableName", s.Config.TableName, "error", err)
+		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to ensure DynamoDb table exists during init", "tableName", s.Config.TableName, "error", err)
 
 		return fmt.Errorf("failed to ensure DynamoDb table %s exists: %w", s.Config.TableName, err)
 	}
 
-	s.logger.InfoContext(ctx, "DynamoDb Store initialized", "region", s.Config.ConnectionRegion, "endpoint", s.Config.ConnectionEndpoint, "tableName", s.Config.TableName)
+	s.logger.InfoContext(ctx, "[DynamoDbStore] DynamoDb Store initialized", "module", "dynamodb_store", "region", s.Config.ConnectionRegion, "endpoint", s.Config.ConnectionEndpoint, "tableName", s.Config.TableName)
 
 	return nil
 }
 
-var _ worker_pools.Store = (*Store)(nil)
+var _ resources.Store = (*Store)(nil)
 
 func (s *Store) CreateTableIfNotExists(ctx context.Context, tableName string) error {
-	s.logger.DebugContext(ctx, "Checking if table exists", "tableName", tableName)
+	s.logger.DebugContext(ctx, "[DynamoDbStore] Checking if table exists", "module", "dynamodb_store", "tableName", tableName)
 
 	_, err := s.client.DescribeTable(ctx, &dynamodb.DescribeTableInput{
 		TableName: aws.String(tableName),
@@ -74,16 +74,16 @@ func (s *Store) CreateTableIfNotExists(ctx context.Context, tableName string) er
 		var notFoundEx *types.ResourceNotFoundException
 
 		if errors.As(err, &notFoundEx) {
-			s.logger.InfoContext(ctx, "Table not found, creating table", "tableName", tableName)
+			s.logger.InfoContext(ctx, "[DynamoDbStore] Table not found, creating table", "module", "dynamodb_store", "tableName", tableName)
 			return s.CreateTable(ctx, tableName)
 		}
 
-		s.logger.ErrorContext(ctx, "Failed to describe table", "tableName", tableName, "error", err)
+		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to describe table", "module", "dynamodb_store", "tableName", tableName, "error", err)
 
 		return fmt.Errorf("failed to describe table %s: %w", tableName, err)
 	}
 
-	s.logger.DebugContext(ctx, "Table already exists", "tableName", tableName)
+	s.logger.DebugContext(ctx, "[DynamoDbStore] Table already exists", "module", "dynamodb_store", "tableName", tableName)
 
 	return nil
 }
@@ -93,13 +93,13 @@ func (s *Store) CreateTable(ctx context.Context, tableName string) error {
 		TableName: aws.String(tableName),
 		AttributeDefinitions: []types.AttributeDefinition{
 			{
-				AttributeName: aws.String("PoolId"),
+				AttributeName: aws.String("ResourceInstanceId"),
 				AttributeType: types.ScalarAttributeTypeS,
 			},
 		},
 		KeySchema: []types.KeySchemaElement{
 			{
-				AttributeName: aws.String("PoolId"),
+				AttributeName: aws.String("ResourceInstanceId"),
 				KeyType:       types.KeyTypeHash,
 			},
 		},
@@ -108,11 +108,11 @@ func (s *Store) CreateTable(ctx context.Context, tableName string) error {
 
 	_, err := s.client.CreateTable(ctx, input)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "Failed to create table", "tableName", tableName, "error", err)
+		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to create table", "module", "dynamodb_store", "tableName", tableName, "error", err)
 		return fmt.Errorf("failed to create table %s: %w", tableName, err)
 	}
 
-	s.logger.InfoContext(ctx, "Table creation initiated, waiting for table to become active", "tableName", tableName)
+	s.logger.InfoContext(ctx, "[DynamoDbStore] Table creation initiated, waiting for table to become active", "module", "dynamodb_store", "tableName", tableName)
 
 	waiter := dynamodb.NewTableExistsWaiter(s.client)
 	err = waiter.Wait(ctx, &dynamodb.DescribeTableInput{
@@ -120,20 +120,20 @@ func (s *Store) CreateTable(ctx context.Context, tableName string) error {
 	}, s.Config.TableCreationTimeout)
 
 	if err != nil {
-		s.logger.ErrorContext(ctx, "Error waiting for table to exist", "tableName", tableName, "error", err)
+		s.logger.ErrorContext(ctx, "[DynamoDbStore] Error waiting for table to exist", "module", "dynamodb_store", "tableName", tableName, "error", err)
 		return fmt.Errorf("error waiting for table %s to exist: %w", tableName, err)
 	}
 
-	s.logger.InfoContext(ctx, "Table created and active", "tableName", tableName)
+	s.logger.InfoContext(ctx, "[DynamoDbStore] Table created and active", "module", "dynamodb_store", "tableName", tableName)
 
 	return nil
 }
 
-func (s *Store) GetWorkerPoolState(ctx context.Context, poolId string) (*worker_pools.WorkerPoolState, error) {
-	s.logger.DebugContext(ctx, "Getting worker pool state", "poolId", poolId, "tableName", s.Config.TableName)
+func (s *Store) GetResourceInstanceState(ctx context.Context, resourceInstanceId string) (*resources.ResourceInstanceState, error) {
+	s.logger.DebugContext(ctx, "[DynamoDbStore] Getting resource instance state", "module", "dynamodb_store", "resourceInstanceId", resourceInstanceId, "tableName", s.Config.TableName)
 
 	key := map[string]types.AttributeValue{
-		"PoolId": &types.AttributeValueMemberS{Value: poolId},
+		"ResourceInstanceId": &types.AttributeValueMemberS{Value: resourceInstanceId},
 	}
 
 	input := &dynamodb.GetItemInput{
@@ -143,35 +143,35 @@ func (s *Store) GetWorkerPoolState(ctx context.Context, poolId string) (*worker_
 
 	result, err := s.client.GetItem(ctx, input)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "Failed to get item from DynamoDb", "poolId", poolId, "tableName", s.Config.TableName, "error", err)
+		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to get item from DynamoDb", "module", "dynamodb_store", "resourceInstanceId", resourceInstanceId, "tableName", s.Config.TableName, "error", err)
 		return nil, fmt.Errorf("dynamodb.GetItem failed: %w", err)
 	}
 
 	if result.Item == nil {
-		s.logger.DebugContext(ctx, "Worker pool state not found", "poolId", poolId, "tableName", s.Config.TableName)
-		// Consider returning a business-layer specific error e.g., worker_pools.ErrStateNotFound
+		s.logger.DebugContext(ctx, "[DynamoDbStore] Worker pool state not found", "module", "dynamodb_store", "resourceInstanceId", resourceInstanceId, "tableName", s.Config.TableName)
+		// Consider returning a business-layer specific error e.g., resources.ErrStateNotFound
 		return nil, nil // Or return an error indicating not found
 	}
 
-	var state worker_pools.WorkerPoolState
+	var state resources.ResourceInstanceState
 
 	err = attributevalue.UnmarshalMap(result.Item, &state)
 
 	if err != nil {
-		s.logger.ErrorContext(ctx, "Failed to unmarshal item from DynamoDb", "poolId", poolId, "item", result.Item, "error", err)
+		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to unmarshal item from DynamoDb", "module", "dynamodb_store", "resourceInstanceId", resourceInstanceId, "item", result.Item, "error", err)
 		return nil, fmt.Errorf("attributevalue.UnmarshalMap failed: %w", err)
 	}
 
 	return &state, nil
 }
 
-func (s *Store) PutWorkerPoolState(ctx context.Context, state *worker_pools.WorkerPoolState) error {
-	s.logger.DebugContext(ctx, "Putting worker pool state", "poolId", state.PoolId, "tableName", s.Config.TableName)
+func (s *Store) PutResourceInstanceState(ctx context.Context, state *resources.ResourceInstanceState) error {
+	s.logger.DebugContext(ctx, "[DynamoDbStore] Putting resource instance state", "module", "dynamodb_store", "resourceInstanceId", state.ResourceInstanceId, "tableName", s.Config.TableName)
 
 	item, err := attributevalue.MarshalMap(state)
 
 	if err != nil {
-		s.logger.ErrorContext(ctx, "Failed to marshal state for PutItem", "poolId", state.PoolId, "error", err)
+		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to marshal state for PutItem", "module", "dynamodb_store", "resourceInstanceId", state.ResourceInstanceId, "error", err)
 		return fmt.Errorf("attributevalue.MarshalMap failed: %w", err)
 	}
 
@@ -183,20 +183,20 @@ func (s *Store) PutWorkerPoolState(ctx context.Context, state *worker_pools.Work
 	_, err = s.client.PutItem(ctx, input)
 
 	if err != nil {
-		s.logger.ErrorContext(ctx, "Failed to put item to DynamoDb", "poolId", state.PoolId, "tableName", s.Config.TableName, "error", err)
+		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to put item to DynamoDb", "module", "dynamodb_store", "resourceInstanceId", state.ResourceInstanceId, "tableName", s.Config.TableName, "error", err)
 		return fmt.Errorf("dynamodb.PutItem failed: %w", err)
 	}
 
-	s.logger.InfoContext(ctx, "Successfully put worker pool state", "poolId", state.PoolId, "tableName", s.Config.TableName)
+	s.logger.InfoContext(ctx, "[DynamoDbStore] Successfully put resource instance state", "module", "dynamodb_store", "resourceInstanceId", state.ResourceInstanceId, "tableName", s.Config.TableName)
 
 	return nil
 }
 
-func (s *Store) DeleteWorkerPoolState(ctx context.Context, poolId string) error {
-	s.logger.DebugContext(ctx, "Deleting worker pool state", "poolId", poolId, "tableName", s.Config.TableName)
+func (s *Store) DeleteResourceInstanceState(ctx context.Context, resourceInstanceId string) error {
+	s.logger.DebugContext(ctx, "[DynamoDbStore] Deleting resource instance state", "module", "dynamodb_store", "resourceInstanceId", resourceInstanceId, "tableName", s.Config.TableName)
 
 	key := map[string]types.AttributeValue{
-		"PoolId": &types.AttributeValueMemberS{Value: poolId},
+		"ResourceInstanceId": &types.AttributeValueMemberS{Value: resourceInstanceId},
 	}
 
 	input := &dynamodb.DeleteItemInput{
@@ -207,11 +207,11 @@ func (s *Store) DeleteWorkerPoolState(ctx context.Context, poolId string) error 
 	_, err := s.client.DeleteItem(ctx, input)
 
 	if err != nil {
-		s.logger.ErrorContext(ctx, "Failed to delete item from DynamoDb", "poolId", poolId, "tableName", s.Config.TableName, "error", err)
+		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to delete item from DynamoDb", "module", "dynamodb_store", "resourceInstanceId", resourceInstanceId, "tableName", s.Config.TableName, "error", err)
 		return fmt.Errorf("dynamodb.DeleteItem failed: %w", err)
 	}
 
-	s.logger.InfoContext(ctx, "Successfully deleted worker pool state", "poolId", poolId, "tableName", s.Config.TableName)
+	s.logger.InfoContext(ctx, "[DynamoDbStore] Successfully deleted resource instance state", "module", "dynamodb_store", "resourceInstanceId", resourceInstanceId, "tableName", s.Config.TableName)
 
 	return nil
 }

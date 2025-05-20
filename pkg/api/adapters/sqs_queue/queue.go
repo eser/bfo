@@ -47,7 +47,7 @@ func (q *Queue) Init(ctx context.Context) (*string, error) {
 
 	cfg, err := config.LoadDefaultConfig(ctx, cfgOptions...)
 	if err != nil {
-		q.logger.ErrorContext(ctx, "unable to load SDK config", "error", err)
+		q.logger.ErrorContext(ctx, "[SqsQueue] unable to load SDK config", "module", "sqs_queue", "error", err)
 
 		return nil, fmt.Errorf("failed to load AWS SDK config: %w", err)
 	}
@@ -56,18 +56,18 @@ func (q *Queue) Init(ctx context.Context) (*string, error) {
 
 	taskQueueURL, err := q.CreateQueueIfNotExists(ctx, q.Config.TaskQueueName)
 	if err != nil {
-		q.logger.ErrorContext(ctx, "Failed to ensure SQS queue exists during init", "queueName", q.Config.TaskQueueName, "error", err)
+		q.logger.ErrorContext(ctx, "[SqsQueue] Failed to ensure SQS queue exists during init", "module", "sqs_queue", "queueName", q.Config.TaskQueueName, "error", err)
 
 		return nil, fmt.Errorf("failed to ensure SQS queue %s exists: %w", q.Config.TaskQueueName, err)
 	}
 
-	q.logger.InfoContext(ctx, "SQS Queue initialized", "region", q.Config.ConnectionRegion, "endpoint", q.Config.ConnectionEndpoint, "taskQueueURL", *taskQueueURL)
+	q.logger.InfoContext(ctx, "[SqsQueue] SQS Queue initialized", "module", "sqs_queue", "region", q.Config.ConnectionRegion, "endpoint", q.Config.ConnectionEndpoint, "taskQueueURL", *taskQueueURL)
 
 	return taskQueueURL, nil
 }
 
 func (q *Queue) GetQueueURL(ctx context.Context, queueName string) (*string, error) {
-	q.logger.DebugContext(ctx, "GetQueueURL is trying to get queue url", "queueName", queueName)
+	q.logger.DebugContext(ctx, "[SqsQueue] GetQueueURL is trying to get queue url", "module", "sqs_queue", "queueName", queueName)
 	queueURLOut, err := q.client.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
 		QueueName: aws.String(queueName),
 	})
@@ -84,7 +84,7 @@ func (q *Queue) GetQueueURL(ctx context.Context, queueName string) (*string, err
 }
 
 func (q *Queue) ListQueues(ctx context.Context) ([]string, error) {
-	q.logger.DebugContext(ctx, "ListQueues is trying to list queues")
+	q.logger.DebugContext(ctx, "[SqsQueue] ListQueues is trying to list queues", "module", "sqs_queue")
 	listOut, err := q.client.ListQueues(ctx, &sqs.ListQueuesInput{})
 	if err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ func (q *Queue) ListQueues(ctx context.Context) ([]string, error) {
 }
 
 func (q *Queue) CreateQueue(ctx context.Context, queueName string) (*string, error) {
-	q.logger.DebugContext(ctx, "CreateQueue is trying to create queue", "queueName", queueName)
+	q.logger.DebugContext(ctx, "[SqsQueue] CreateQueue is trying to create queue", "module", "sqs_queue", "queueName", queueName)
 
 	createOut, err := q.client.CreateQueue(ctx, &sqs.CreateQueueInput{
 		QueueName: aws.String(queueName),
@@ -103,19 +103,19 @@ func (q *Queue) CreateQueue(ctx context.Context, queueName string) (*string, err
 		return nil, err
 	}
 
-	q.logger.Info("Queue created", "queueUrl", *createOut.QueueUrl)
+	q.logger.InfoContext(ctx, "[SqsQueue] Queue created", "module", "sqs_queue", "queueUrl", *createOut.QueueUrl)
 	return createOut.QueueUrl, nil
 }
 
 func (q *Queue) CreateQueueIfNotExists(ctx context.Context, queueName string) (*string, error) {
-	q.logger.DebugContext(ctx, "CreateQueueIfNotExists is trying to get queue url to find out if queue exists", "queueName", queueName)
+	q.logger.DebugContext(ctx, "[SqsQueue] CreateQueueIfNotExists is trying to get queue url to find out if queue exists", "module", "sqs_queue", "queueName", queueName)
 	queueURL, err := q.GetQueueURL(ctx, queueName)
 	if err != nil {
 		return nil, err
 	}
 
 	if queueURL == nil {
-		q.logger.DebugContext(ctx, "CreateQueueIfNotExists couldn't find queue, creating", "queueName", queueName)
+		q.logger.DebugContext(ctx, "[SqsQueue] CreateQueueIfNotExists couldn't find queue, creating", "module", "sqs_queue", "queueName", queueName)
 		return q.CreateQueue(ctx, queueName)
 	}
 
@@ -123,7 +123,7 @@ func (q *Queue) CreateQueueIfNotExists(ctx context.Context, queueName string) (*
 }
 
 func (q *Queue) SendMessage(ctx context.Context, queueURL string, message string) error {
-	q.logger.DebugContext(ctx, "SendMessage is trying to send message", "queueURL", queueURL)
+	q.logger.DebugContext(ctx, "[SqsQueue] SendMessage is trying to send message", "module", "sqs_queue", "queueURL", queueURL)
 	sendMessageInput := &sqs.SendMessageInput{
 		QueueUrl:    aws.String(queueURL),
 		MessageBody: aws.String(message),
@@ -134,12 +134,12 @@ func (q *Queue) SendMessage(ctx context.Context, queueURL string, message string
 		return err
 	}
 
-	q.logger.Info("Message sent", "messageId", *sendOut.MessageId)
+	q.logger.InfoContext(ctx, "[SqsQueue] Message sent", "module", "sqs_queue", "messageId", *sendOut.MessageId)
 	return nil
 }
 
 func (q *Queue) ReceiveMessages(ctx context.Context, queueURL string) ([]Message, error) {
-	q.logger.DebugContext(ctx, "ReceiveMessages is trying to receive messages", "queueURL", queueURL)
+	q.logger.DebugContext(ctx, "[SqsQueue] ReceiveMessages is trying to receive messages", "module", "sqs_queue", "queueURL", queueURL)
 	receiveOut, err := q.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(queueURL),
 		MaxNumberOfMessages: q.Config.MaxNumberOfMessages,
@@ -151,13 +151,13 @@ func (q *Queue) ReceiveMessages(ctx context.Context, queueURL string) ([]Message
 			return nil, nil
 		}
 
-		q.logger.ErrorContext(ctx, "ReceiveMessages failed", "error", err)
+		q.logger.ErrorContext(ctx, "[SqsQueue] ReceiveMessages failed", "module", "sqs_queue", "error", err)
 		return nil, err
 	}
 
 	messages := make([]Message, len(receiveOut.Messages))
 	if len(messages) == 0 {
-		q.logger.DebugContext(ctx, "ReceiveMessages received no messages")
+		q.logger.DebugContext(ctx, "[SqsQueue] ReceiveMessages received no messages", "module", "sqs_queue")
 		return messages, nil
 	}
 
@@ -168,21 +168,21 @@ func (q *Queue) ReceiveMessages(ctx context.Context, queueURL string) ([]Message
 		}
 	}
 
-	q.logger.DebugContext(ctx, "ReceiveMessages received messages", "messages", messages)
+	q.logger.DebugContext(ctx, "[SqsQueue] ReceiveMessages received messages", "module", "sqs_queue", "messages", messages)
 	return messages, nil
 }
 
 func (q *Queue) DeleteMessage(ctx context.Context, queueURL string, receiptHandle string) error {
-	q.logger.DebugContext(ctx, "DeleteMessage is trying to delete message", "queueURL", queueURL, "receiptHandle", receiptHandle)
+	q.logger.DebugContext(ctx, "[SqsQueue] DeleteMessage is trying to delete message", "module", "sqs_queue", "queueURL", queueURL, "receiptHandle", receiptHandle)
 	_, err := q.client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(queueURL),
 		ReceiptHandle: aws.String(receiptHandle),
 	})
 	if err != nil {
-		q.logger.ErrorContext(ctx, "DeleteMessage failed", "error", err)
+		q.logger.ErrorContext(ctx, "[SqsQueue] DeleteMessage failed", "module", "sqs_queue", "error", err)
 		return err
 	}
 
-	q.logger.InfoContext(ctx, "Message deleted", "receiptHandle", receiptHandle)
+	q.logger.InfoContext(ctx, "[SqsQueue] Message deleted", "module", "sqs_queue", "receiptHandle", receiptHandle)
 	return nil
 }

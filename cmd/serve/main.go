@@ -14,14 +14,14 @@ func main() {
 		panic(err)
 	}
 
-	ctx := context.Background()
+	baseCtx := context.Background()
 
-	err = appContext.Init(ctx)
+	err = appContext.Init(baseCtx)
 	if err != nil {
 		panic(err)
 	}
 
-	process := processfx.New(ctx, appContext.Logger)
+	process := processfx.New(baseCtx, appContext.Logger)
 
 	process.StartGoroutine("http-server", func(ctx context.Context) error {
 		cleanup, err := http.Run(
@@ -30,7 +30,7 @@ func main() {
 		)
 
 		if err != nil {
-			appContext.Logger.ErrorContext(ctx, "HTTP server run failed", "error", err)
+			appContext.Logger.ErrorContext(ctx, "[Main] HTTP server run failed", "module", "main", "error", err)
 		}
 
 		defer cleanup()
@@ -50,6 +50,8 @@ func main() {
 				err := appContext.Tick(ctx)
 
 				if err != nil {
+					appContext.Logger.ErrorContext(ctx, "[Main] Error during tick", "module", "main", "error", err)
+
 					return err
 				}
 			}
