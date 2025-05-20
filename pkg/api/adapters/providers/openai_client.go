@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/eser/bfo/pkg/api/business/resources"
 	"github.com/google/go-querystring/query"
@@ -18,36 +17,27 @@ import (
 
 var _ Provider = (*OpenAiClient)(nil)
 
-const (
-	DefaultTimeout = 30 * time.Second
-)
-
 type OpenAiClient struct {
-	resourceDef *resources.ResourceDef
-	httpClient  *http.Client
+	config     *resources.ConfigResource
+	httpClient *http.Client
 }
 
-func NewOpenAiClient(resourceDef *resources.ResourceDef) *OpenAiClient {
-	timeout := resourceDef.RequestTimeout
-	if timeout == 0 {
-		timeout = DefaultTimeout
-	}
-
+func NewOpenAiClient(config *resources.ConfigResource) *OpenAiClient {
 	return &OpenAiClient{
-		resourceDef: resourceDef,
+		config: config,
 		httpClient: &http.Client{
-			Timeout: timeout,
+			Timeout: config.RequestTimeout,
 		},
 	}
 }
 
 func (c *OpenAiClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	reqURL := c.resourceDef.BaseUrl + path
+	reqURL := c.config.BaseUrl + path
 	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.resourceDef.ApiKey)
+	req.Header.Set("Authorization", "Bearer "+c.config.ApiKey)
 	return req, nil
 }
 

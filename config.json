@@ -1,3 +1,57 @@
 {
-  "name": "bfo"
+  "name": "bfo",
+  "resources": {
+    "azure": {
+      "provider": "mock",
+      "api_key": "1234567890",
+      "max_concurrency": 8,
+      "models": {
+        "gemini-2.5-pro": {},
+        "gemini-2.5-flash": {},
+        "gemini-2.5-preview": {
+          "batching": false
+        }
+      },
+      "instances": {
+        "1": {
+          "region": "us-central1"
+        },
+        "2": {
+          "region": "europe-west4"
+        },
+        "3": {
+          "region": "asia-southeast1"
+        }
+      }
+    },
+    "aws": {
+      "provider": "mock",
+      "api_key": "1234567890",
+      "models": {
+        "gpt-4o-mini": {
+          "enqueued_token_limit": 10000
+        },
+        "gpt-4o": {
+          "enqueued_token_limit": 10000
+        },
+        "gpt-o4-high": {
+          "batching": false,
+          "enqueued_token_limit": 10000
+        }
+      },
+      "instances": {
+        "1": {
+          "region": "westus",
+          "models": {
+            "gpt-4o-mini": {
+              "enqueued_token_limit": 5000
+            }
+          }
+        },
+        "2": {
+          "region": "swedencentral"
+        }
+      }
+    }
+  }
 }

@@ -69,12 +69,12 @@ func NewAppContext() (*AppContext, error) {
 	appContext.DynamoDbStore = dynamodb_store.New(&appContext.Config.DynamoDbStore, appContext.Logger)
 
 	// resources
-	appContext.Resources = resources.NewService(appContext.Logger)
-	appContext.Resources.AddProvider("mock", func(resourceDef *resources.ResourceDef) resources.Provider {
+	appContext.Resources = resources.NewService(&appContext.Config.Resources, appContext.Logger)
+	appContext.Resources.AddProvider("mock", func(config *resources.ConfigResource) resources.Provider {
 		return &providers.MockClient{}
 	})
-	appContext.Resources.AddProvider("openai", func(resourceDef *resources.ResourceDef) resources.Provider {
-		return providers.NewOpenAiClient(resourceDef)
+	appContext.Resources.AddProvider("openai", func(config *resources.ConfigResource) resources.Provider {
+		return providers.NewOpenAiClient(config)
 	})
 
 	// tasks
@@ -114,7 +114,7 @@ func (a *AppContext) Init(ctx context.Context) error {
 
 	// resources
 
-	err = a.Resources.LoadResourcesFromFile("./etc/resources.json")
+	err = a.Resources.Init()
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}

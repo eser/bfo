@@ -1,25 +1,28 @@
 package resources
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/eser/ajan/logfx"
 )
 
+type ProviderFn = func(config *ConfigResource) Provider
+
 type Service struct {
+	config *Config
 	logger *logfx.Logger
 
 	providers map[string]ProviderFn
-	resources []Resource
+	resources map[string]Provider
 }
 
-func NewService(logger *logfx.Logger) *Service {
+func NewService(config *Config, logger *logfx.Logger) *Service {
 	return &Service{
-		logger:    logger,
+		config: config,
+		logger: logger,
+
 		providers: make(map[string]ProviderFn),
-		resources: make([]Resource, 0),
+		resources: make(map[string]Provider),
 	}
 }
 
@@ -29,48 +32,31 @@ func (s *Service) AddProvider(key string, providerFn ProviderFn) {
 	s.logger.Debug("[Resources] Provider added", "module", "resources", "key", key)
 }
 
-func (s *Service) AddResource(resourceDef ResourceDef) error {
-	providerFn, okProviderFn := s.providers[resourceDef.Provider]
+func (s *Service) AddResource(key string, config ConfigResource) error {
+	providerFn, okProviderFn := s.providers[config.Provider]
 	if !okProviderFn {
-		return fmt.Errorf("provider '%s' not found", resourceDef.Provider)
+		return fmt.Errorf("provider '%s' not found for resource '%s'", config.Provider, key)
 	}
 
-	providerInstance := providerFn(&resourceDef)
+	s.resources[key] = providerFn(&config)
 
-	resource := Resource{
-		ResourceDef:      resourceDef,
-		providerInstance: providerInstance,
-	}
-
-	s.resources = append(s.resources, resource)
-
-	s.logger.Debug("[Resources] Resource added", "module", "resources", "resourceDef", resourceDef)
+	s.logger.Debug("[Resources] Resource added", "module", "resources", "key", key, "config", config)
 
 	return nil
 }
 
-func (s *Service) LoadResourcesFromFile(path string) error {
-	s.logger.Debug("[Resources] Loading resources from file", "module", "resources", "path", path)
+func (s *Service) Init() error {
+	s.logger.Debug("[Resources] Loading resources from config", "module", "resources")
 
-	file, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	var resourceDefs []ResourceDef
-	if err := json.Unmarshal(file, &resourceDefs); err != nil {
-		return err
-	}
-
-	for _, resourceDef := range resourceDefs {
-		err := s.AddResource(resourceDef)
+	for key, resourceConfig := range *s.config {
+		err := s.AddResource(key, resourceConfig)
 
 		if err != nil {
 			return err
 		}
 	}
 
-	s.logger.Debug("[Resources] Resources loaded from file", "module", "resources", "path", path)
+	s.logger.Debug("[Resources] Resources loaded from config", "module", "resources")
 
 	return nil
 }
