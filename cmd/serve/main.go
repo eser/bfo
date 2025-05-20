@@ -6,7 +6,6 @@ import (
 	"github.com/eser/ajan/processfx"
 	"github.com/eser/bfo/pkg/api/adapters/appcontext"
 	"github.com/eser/bfo/pkg/api/adapters/http"
-	"github.com/eser/bfo/pkg/api/business/tasks"
 )
 
 func main() {
@@ -46,11 +45,9 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return nil
+
 			default:
-				err := appContext.Tasks.ProcessNextTask(ctx, func(innerCtx context.Context, task tasks.Task) error {
-					appContext.Logger.InfoContext(innerCtx, "Processing task", "task", task)
-					return nil
-				})
+				err := appContext.Tick(ctx)
 
 				if err != nil {
 					return err

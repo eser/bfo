@@ -41,7 +41,7 @@ services:
     image: localstack/localstack:latest
     restart: unless-stopped
     environment:
-      SERVICES: sqs
+      SERVICES: sqs,dynamodb
       DEBUG: 1
       DOCKER_HOST: unix:///var/run/docker.sock
     volumes:

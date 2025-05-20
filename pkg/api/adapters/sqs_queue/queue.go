@@ -3,6 +3,7 @@ package sqs_queue
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -27,7 +28,7 @@ func New(config *Config, logger *logfx.Logger) *Queue {
 	return &Queue{Config: config, logger: logger}
 }
 
-func (q *Queue) Init(ctx context.Context) {
+func (q *Queue) Init(ctx context.Context) (*string, error) {
 	var cfgOptions []func(*config.LoadOptions) error
 	var sqsClientOptions []func(*sqs.Options)
 
@@ -46,10 +47,23 @@ func (q *Queue) Init(ctx context.Context) {
 
 	cfg, err := config.LoadDefaultConfig(ctx, cfgOptions...)
 	if err != nil {
-		q.logger.Error("unable to load SDK config", "error", err)
+		q.logger.ErrorContext(ctx, "unable to load SDK config", "error", err)
+
+		return nil, fmt.Errorf("failed to load AWS SDK config: %w", err)
 	}
 
 	q.client = sqs.NewFromConfig(cfg, sqsClientOptions...)
+
+	taskQueueURL, err := q.CreateQueueIfNotExists(ctx, q.Config.TaskQueueName)
+	if err != nil {
+		q.logger.ErrorContext(ctx, "Failed to ensure SQS queue exists during init", "queueName", q.Config.TaskQueueName, "error", err)
+
+		return nil, fmt.Errorf("failed to ensure SQS queue %s exists: %w", q.Config.TaskQueueName, err)
+	}
+
+	q.logger.InfoContext(ctx, "SQS Queue initialized", "region", q.Config.ConnectionRegion, "endpoint", q.Config.ConnectionEndpoint, "taskQueueURL", *taskQueueURL)
+
+	return taskQueueURL, nil
 }
 
 func (q *Queue) GetQueueURL(ctx context.Context, queueName string) (*string, error) {
@@ -81,6 +95,7 @@ func (q *Queue) ListQueues(ctx context.Context) ([]string, error) {
 
 func (q *Queue) CreateQueue(ctx context.Context, queueName string) (*string, error) {
 	q.logger.DebugContext(ctx, "CreateQueue is trying to create queue", "queueName", queueName)
+
 	createOut, err := q.client.CreateQueue(ctx, &sqs.CreateQueueInput{
 		QueueName: aws.String(queueName),
 	})

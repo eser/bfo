@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"sync"
 
 	"github.com/eser/ajan/configfx"
 	"github.com/eser/ajan/logfx"
 	"github.com/eser/ajan/metricsfx"
 
+	"github.com/eser/bfo/pkg/api/adapters/dynamodb_store"
 	"github.com/eser/bfo/pkg/api/adapters/sqs_queue"
 	"github.com/eser/bfo/pkg/api/business/resources"
 	"github.com/eser/bfo/pkg/api/business/tasks"
@@ -24,12 +24,11 @@ type AppContext struct {
 	Logger  *logfx.Logger
 	Metrics *metricsfx.MetricsProvider
 	// Queue   *queuefx.Registry
-	SqsQueue *sqs_queue.Queue
+	SqsQueue      *sqs_queue.Queue
+	DynamoDBStore *dynamodb_store.Store
 
 	Resources *resources.Service
 	Tasks     *tasks.Service
-
-	WaitGroup sync.WaitGroup
 }
 
 func NewAppContext() (*AppContext, error) {
@@ -65,6 +64,9 @@ func NewAppContext() (*AppContext, error) {
 	// sqs queue
 	appContext.SqsQueue = sqs_queue.New(&appContext.Config.SqsQueue, appContext.Logger)
 
+	// dynamodb store
+	appContext.DynamoDBStore = dynamodb_store.New(&appContext.Config.DynamoDBStore, appContext.Logger)
+
 	// services
 	appContext.Resources = resources.NewService(appContext.Logger)
 	appContext.Tasks = tasks.NewService(&appContext.Config.Tasks, appContext.Logger, appContext.SqsQueue)
@@ -87,16 +89,19 @@ func (a *AppContext) Init(ctx context.Context) error {
 	// 	return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
 	// }
 
-	// sqs queue
+	// dynamodb store
 
-	a.SqsQueue.Init(ctx)
-
-	taskQueueURL, err := a.SqsQueue.CreateQueueIfNotExists(ctx, a.Config.SqsQueue.TaskQueueName)
+	err := a.DynamoDBStore.Init(ctx)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
 
-	a.Logger.Info("Task Queue URL", "taskQueueURL", *taskQueueURL)
+	// sqs queue
+
+	taskQueueURL, err := a.SqsQueue.Init(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInitFailed, err)
+	}
 
 	// resources
 
@@ -112,22 +117,28 @@ func (a *AppContext) Init(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
 
+	// err = a.DynamoDBStore.PutWorkerPoolState(ctx, &worker_pools.WorkerPoolState{
+	// 	PoolID: "default",
+	// 	State:  []byte("non-default"),
+	// })
+	// if err != nil {
+	// 	return fmt.Errorf("%w: %w", ErrInitFailed, err)
+	// }
+
+	// state, err := a.DynamoDBStore.GetWorkerPoolState(ctx, "default")
+	// a.Logger.InfoContext(ctx, "Worker pool state", "state", string(state.State))
+	// if err != nil {
+	// 	return fmt.Errorf("%w: %w", ErrInitFailed, err)
+	// }
+
 	return nil
 }
 
-func (a *AppContext) WaitForShutdown(shutdownCtx context.Context) {
-	a.Logger.InfoContext(shutdownCtx, "AppContext: Waiting for services to shut down...")
+func (a *AppContext) Tick(ctx context.Context) error {
+	err := a.Tasks.ProcessNextTask(ctx, func(innerCtx context.Context, task tasks.Task) error {
+		a.Logger.InfoContext(innerCtx, "Processing task", "task", task)
+		return nil
+	})
 
-	doneCh := make(chan struct{})
-	go func() {
-		defer close(doneCh)
-		a.WaitGroup.Wait()
-	}()
-
-	select {
-	case <-doneCh:
-		a.Logger.InfoContext(shutdownCtx, "AppContext: All services shut down gracefully.")
-	case <-shutdownCtx.Done():
-		a.Logger.ErrorContext(shutdownCtx, "AppContext: Shutdown timed out waiting for services.", "error", shutdownCtx.Err())
-	}
+	return err
 }
