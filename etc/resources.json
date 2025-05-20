@@ -2,6 +2,7 @@
   {
     "id": "1",
     "provider": "vertex",
+    "disabled": true,
     "api_key": "1234567890",
     "max_concurrency": 8,
     "models": [

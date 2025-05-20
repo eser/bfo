@@ -27,8 +27,9 @@ type Resource struct {
 
 	Models []Model `json:"models,omitempty"`
 
-	MaxConcurrency     int `json:"max_concurrency,omitempty"`
-	MaxTokenPerBatch   int `json:"max_token_per_batch,omitempty"`
-	MaxRequestPerBatch int `json:"max_request_per_batch,omitempty"`
-	EnqueuedTokenLimit int `json:"enqueued_token_limit,omitempty"`
+	MaxConcurrency     int  `json:"max_concurrency,omitempty"`
+	MaxTokenPerBatch   int  `json:"max_token_per_batch,omitempty"`
+	MaxRequestPerBatch int  `json:"max_request_per_batch,omitempty"`
+	EnqueuedTokenLimit int  `json:"enqueued_token_limit,omitempty"`
+	Disabled           bool `json:"disabled,omitempty"`
 }

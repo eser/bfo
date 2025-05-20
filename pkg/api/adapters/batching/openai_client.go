@@ -1,4 +1,4 @@
-package openai_batch
+package batching
 
 import (
 	"bytes"
@@ -14,21 +14,21 @@ import (
 	"github.com/google/go-querystring/query"
 )
 
-// Client is the OpenAI Batch API client.
-type Client struct {
+var _ Batcher = (*OpenAiClient)(nil)
+
+type OpenAiClient struct {
 	httpClient *http.Client
 	config     Config
 }
 
-// NewClient creates a new OpenAI Batch API client.
-func NewClient(config Config) *Client {
-	return &Client{
+func NewOpenAiClient(config Config) *OpenAiClient {
+	return &OpenAiClient{
 		config:     config,
 		httpClient: &http.Client{Timeout: config.Timeout},
 	}
 }
 
-func (c *Client) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
+func (c *OpenAiClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
 	reqURL := c.config.BaseURL + path
 	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
 	if err != nil {
@@ -38,7 +38,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 	return req, nil
 }
 
-func (c *Client) do(req *http.Request, v any) error {
+func (c *OpenAiClient) do(req *http.Request, v any) error {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to execute request: %w", err)
@@ -60,7 +60,7 @@ func (c *Client) do(req *http.Request, v any) error {
 
 // CreateFile uploads a file that can be used across OpenAI services.
 // The file path provided should be an absolute path or relative to the execution directory.
-func (c *Client) CreateFile(ctx context.Context, filePath string, purpose string) (*File, error) {
+func (c *OpenAiClient) CreateFile(ctx context.Context, filePath string, purpose string) (*File, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %s: %w", filePath, err)
@@ -104,7 +104,7 @@ func (c *Client) CreateFile(ctx context.Context, filePath string, purpose string
 }
 
 // CreateBatch creates and executes a batch from an uploaded file.
-func (c *Client) CreateBatch(ctx context.Context, batchReq CreateBatchRequest) (*Batch, error) {
+func (c *OpenAiClient) CreateBatch(ctx context.Context, batchReq CreateBatchRequest) (*Batch, error) {
 	jsonBody, err := json.Marshal(batchReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal create batch request: %w", err)
@@ -124,8 +124,9 @@ func (c *Client) CreateBatch(ctx context.Context, batchReq CreateBatchRequest) (
 }
 
 // RetrieveBatch retrieves a batch.
-func (c *Client) RetrieveBatch(ctx context.Context, batchID string) (*Batch, error) {
+func (c *OpenAiClient) RetrieveBatch(ctx context.Context, batchID string) (*Batch, error) {
 	path := fmt.Sprintf("/batches/%s", batchID)
+
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
@@ -135,12 +136,14 @@ func (c *Client) RetrieveBatch(ctx context.Context, batchID string) (*Batch, err
 	if err := c.do(req, &batch); err != nil {
 		return nil, err
 	}
+
 	return &batch, nil
 }
 
 // CancelBatch cancels an in-progress batch.
-func (c *Client) CancelBatch(ctx context.Context, batchID string) (*Batch, error) {
+func (c *OpenAiClient) CancelBatch(ctx context.Context, batchID string) (*Batch, error) {
 	path := fmt.Sprintf("/batches/%s/cancel", batchID)
+
 	req, err := c.newRequest(ctx, http.MethodPost, path, nil)
 	if err != nil {
 		return nil, err
@@ -150,11 +153,11 @@ func (c *Client) CancelBatch(ctx context.Context, batchID string) (*Batch, error
 	if err := c.do(req, &batch); err != nil {
 		return nil, err
 	}
+
 	return &batch, nil
 }
 
-// ListBatches lists your organization's batches.
-func (c *Client) ListBatches(ctx context.Context, params *ListBatchesParams) (*ListBatchesResponse, error) {
+func (c *OpenAiClient) ListBatches(ctx context.Context, params *ListBatchesParams) (*ListBatchesResponse, error) {
 	path := "/batches"
 	if params != nil {
 		q, err := query.Values(params)
@@ -175,5 +178,6 @@ func (c *Client) ListBatches(ctx context.Context, params *ListBatchesParams) (*L
 	if err := c.do(req, &response); err != nil {
 		return nil, err
 	}
+
 	return &response, nil
 }

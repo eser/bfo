@@ -1,10 +1,12 @@
-package openai_batch
+package batching
 
-// File purpose for batch operations
-const FilePurposeBatch = "batch"
+const (
+	// File purpose for batch operations
+	FilePurposeBatch = "batch"
 
-// Batch completion window
-const BatchCompletionWindow24h = "24h"
+	// Batch completion window
+	BatchCompletionWindow24h = "24h"
+)
 
 // File represents an OpenAI file object.
 type File struct {
