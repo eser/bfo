@@ -26,8 +26,6 @@ type AppContext struct {
 	// Queue   *queuefx.Registry
 	SqsQueue *sqs_queue.Queue
 
-	// ExternalTool *external_tool.ExternalTool
-
 	Resources *resources.Service
 	Tasks     *tasks.Service
 
@@ -68,9 +66,6 @@ func NewAppContext(ctx context.Context) (*AppContext, error) {
 	// if err != nil {
 	// 	return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
 	// }
-
-	// // external tool
-	// appContext.ExternalTool = external_tool.New(appContext.Config.Externals.ExternalTool)
 
 	// sqs queue
 	appContext.SqsQueue = sqs_queue.New(&appContext.Config.SqsQueue, appContext.Logger)
