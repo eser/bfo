@@ -29,10 +29,10 @@ type AppContext struct {
 	Resources *resources.Service
 	Tasks     *tasks.Service
 
-	wg sync.WaitGroup
+	WaitGroup sync.WaitGroup
 }
 
-func NewAppContext(ctx context.Context) (*AppContext, error) {
+func NewAppContext() (*AppContext, error) {
 	appContext := &AppContext{} //nolint:exhaustruct
 
 	// config
@@ -62,11 +62,6 @@ func NewAppContext(ctx context.Context) (*AppContext, error) {
 	// // queue
 	// appContext.Queue = queuefx.NewRegistry(appContext.Logger)
 
-	// err = appContext.Queue.LoadFromConfig(ctx, &appContext.Config.Queue)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
-	// }
-
 	// sqs queue
 	appContext.SqsQueue = sqs_queue.New(&appContext.Config.SqsQueue, appContext.Logger)
 
@@ -77,7 +72,7 @@ func NewAppContext(ctx context.Context) (*AppContext, error) {
 	return appContext, nil
 }
 
-func (a *AppContext) Run(ctx context.Context) error {
+func (a *AppContext) Init(ctx context.Context) error {
 	a.Logger.InfoContext(
 		ctx,
 		"Starting application layer",
@@ -85,6 +80,12 @@ func (a *AppContext) Run(ctx context.Context) error {
 		slog.String("environment", a.Config.AppEnv),
 		slog.Any("features", a.Config.Features),
 	)
+
+	// queue
+	// err = appContext.Queue.LoadFromConfig(ctx, &appContext.Config.Queue)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("%w: %w", ErrInitFailed, err)
+	// }
 
 	// sqs queue
 
@@ -111,34 +112,6 @@ func (a *AppContext) Run(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
 
-	a.wg.Add(1)
-	go func() {
-		defer a.wg.Done()
-		a.Logger.InfoContext(ctx, "Task processing goroutine started.")
-
-		for {
-			select {
-			case <-ctx.Done():
-				a.Logger.InfoContext(ctx, "Task processing goroutine shutting down due to context cancellation.")
-				return
-			default:
-				processErr := a.Tasks.ProcessNextTask(ctx, func(innerCtx context.Context, task tasks.Task) error {
-					a.Logger.InfoContext(innerCtx, "Processing task", "task", task)
-					return nil
-				})
-				if processErr != nil {
-					// don't log an error if it's just the context being cancelled during shutdown.
-					if !errors.Is(processErr, context.Canceled) && !errors.Is(processErr, context.DeadlineExceeded) {
-						a.Logger.ErrorContext(ctx, "Failed to process task", "error", processErr)
-					} else {
-						// if it's a cancellation error, it might be normal during shutdown.
-						a.Logger.InfoContext(ctx, "Task processing cycle interrupted by context", "error", processErr)
-					}
-				}
-			}
-		}
-	}()
-
 	return nil
 }
 
@@ -148,7 +121,7 @@ func (a *AppContext) WaitForShutdown(shutdownCtx context.Context) {
 	doneCh := make(chan struct{})
 	go func() {
 		defer close(doneCh)
-		a.wg.Wait()
+		a.WaitGroup.Wait()
 	}()
 
 	select {

@@ -133,7 +133,6 @@ func (q *Queue) ReceiveMessages(ctx context.Context, queueURL string) ([]Message
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			q.logger.InfoContext(ctx, "ReceiveMessages context was canceled")
 			return nil, nil
 		}
 

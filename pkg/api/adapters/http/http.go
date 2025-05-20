@@ -8,15 +8,13 @@ import (
 	"github.com/eser/ajan/httpfx/modules/healthcheck"
 	"github.com/eser/ajan/httpfx/modules/openapi"
 	"github.com/eser/ajan/httpfx/modules/profiling"
-	"github.com/eser/ajan/lib"
 	"github.com/eser/bfo/pkg/api/adapters/appcontext"
 )
 
 func Run(
 	ctx context.Context,
-	cancel context.CancelFunc,
 	appContext *appcontext.AppContext,
-) error {
+) (func(), error) {
 	routes := httpfx.NewRouter("/")
 	httpService := httpfx.NewHttpService(
 		&appContext.Config.Http,
@@ -42,15 +40,5 @@ func Run(
 	RegisterHttpRoutesForSite(routes, appContext) //nolint:contextcheck
 
 	// run
-	cleanup, err := httpService.Start(ctx)
-	if err != nil {
-		return err //nolint:wrapcheck
-	}
-
-	defer cleanup()
-
-	lib.WaitForSignal()
-	cancel()
-
-	return nil
+	return httpService.Start(ctx)
 }
