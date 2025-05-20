@@ -6,7 +6,7 @@ type Message struct {
 }
 
 type Task struct {
-	ID        string    `json:"id,omitempty"`
+	Id        string    `json:"id,omitempty"`
 	Messages  []Message `json:"messages"`
 	MaxTokens int       `json:"max_tokens,omitempty"`
 }

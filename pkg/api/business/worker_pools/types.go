@@ -4,7 +4,7 @@ import "context"
 
 // WorkerPoolState represents the state of a worker pool.
 type WorkerPoolState struct {
-	PoolID string `json:"pool_id" dynamodbav:"PoolID"` // Added dynamodbav tag for marshaling
+	PoolId string `json:"pool_id" dynamodbav:"PoolId"` // Added dynamodbav tag for marshaling
 	State  []byte `json:"state" dynamodbav:"State"`    // Using []byte for flexibility
 	// Add other relevant fields like LastUpdated, Version, etc.
 	// LastUpdated int64 `json:"last_updated" dynamodbav:"LastUpdated"`
@@ -13,9 +13,9 @@ type WorkerPoolState struct {
 
 // Store is the interface for storing and retrieving worker pool states.
 type Store interface {
-	GetWorkerPoolState(ctx context.Context, poolID string) (*WorkerPoolState, error)
+	GetWorkerPoolState(ctx context.Context, poolId string) (*WorkerPoolState, error)
 	PutWorkerPoolState(ctx context.Context, state *WorkerPoolState) error
-	DeleteWorkerPoolState(ctx context.Context, poolID string) error
+	DeleteWorkerPoolState(ctx context.Context, poolId string) error
 	// ListWorkerPoolStates(ctx context.Context) ([]*WorkerPoolState, error) // Example of a potential list operation
 }
 

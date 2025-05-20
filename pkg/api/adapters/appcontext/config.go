@@ -14,7 +14,7 @@ type FeatureFlags struct {
 type AppConfig struct {
 	SqsQueue sqs_queue.Config `conf:"SQS_QUEUE"`
 
-	DynamoDBStore dynamodb_store.Config `conf:"DYNAMODB_STORE"`
+	DynamoDbStore dynamodb_store.Config `conf:"DYNAMODB_STORE"`
 
 	ajan.BaseConfig
 

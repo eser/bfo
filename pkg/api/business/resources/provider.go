@@ -1,4 +1,6 @@
-package batching
+package resources
+
+import "context"
 
 const (
 	// File purpose for batch operations
@@ -10,7 +12,7 @@ const (
 
 // File represents an OpenAI file object.
 type File struct {
-	ID            string `json:"id"`
+	Id            string `json:"id"`
 	Object        string `json:"object"` // "file"
 	Filename      string `json:"filename"`
 	Purpose       string `json:"purpose"` // e.g., "batch"
@@ -23,7 +25,7 @@ type File struct {
 // CreateBatchRequest defines the request body for creating a batch.
 type CreateBatchRequest struct {
 	Metadata         map[string]string `json:"metadata,omitempty"`
-	InputFileID      string            `json:"input_file_id"`
+	InputFileId      string            `json:"input_file_id"`
 	Endpoint         string            `json:"endpoint"`          // e.g., "/v1/chat/completions"
 	CompletionWindow string            `json:"completion_window"` // Currently only "24h"
 }
@@ -54,8 +56,8 @@ type BatchRequestCounts struct {
 // Batch represents an OpenAI batch object.
 type Batch struct {
 	Errors           *BatchErrors       `json:"errors,omitempty"`         // Pointer to allow null
-	OutputFileID     *string            `json:"output_file_id,omitempty"` // Pointer to allow null
-	ErrorFileID      *string            `json:"error_file_id,omitempty"`  // Pointer to allow null
+	OutputFileId     *string            `json:"output_file_id,omitempty"` // Pointer to allow null
+	ErrorFileId      *string            `json:"error_file_id,omitempty"`  // Pointer to allow null
 	InProgressAt     *int64             `json:"in_progress_at,omitempty"` // Pointer to allow null
 	ExpiresAt        *int64             `json:"expires_at,omitempty"`     // Pointer to allow null
 	FinalizingAt     *int64             `json:"finalizing_at,omitempty"`  // Pointer to allow null
@@ -63,10 +65,10 @@ type Batch struct {
 	FailedAt         *int64             `json:"failed_at,omitempty"`      // Pointer to allow null
 	CancelledAt      *int64             `json:"cancelled_at,omitempty"`   // Pointer to allow null
 	Metadata         map[string]string  `json:"metadata,omitempty"`
-	ID               string             `json:"id"`
+	Id               string             `json:"id"`
 	Object           string             `json:"object"` // "batch"
 	Endpoint         string             `json:"endpoint"`
-	InputFileID      string             `json:"input_file_id"`
+	InputFileId      string             `json:"input_file_id"`
 	CompletionWindow string             `json:"completion_window"`
 	Status           string             `json:"status"` // e.g., "validating", "failed", "in_progress", "finalizing", "completed", "expired", "cancelling", "cancelled"
 	RequestCounts    BatchRequestCounts `json:"request_counts"`
@@ -75,8 +77,8 @@ type Batch struct {
 
 // ListBatchesResponse defines the response for listing batches.
 type ListBatchesResponse struct {
-	FirstID *string `json:"first_id,omitempty"`
-	LastID  *string `json:"last_id,omitempty"`
+	FirstId *string `json:"first_id,omitempty"`
+	LastId  *string `json:"last_id,omitempty"`
 	Object  string  `json:"object"` // "list"
 	Data    []Batch `json:"data"`
 	HasMore bool    `json:"has_more"`
@@ -87,4 +89,12 @@ type ListBatchesResponse struct {
 type ListBatchesParams struct {
 	After *string `url:"after,omitempty"`
 	Limit *int    `url:"limit,omitempty"`
+}
+
+type Provider interface {
+	CreateFile(ctx context.Context, filePath string, purpose string) (*File, error)
+	CreateBatch(ctx context.Context, batchReq CreateBatchRequest) (*Batch, error)
+	RetrieveBatch(ctx context.Context, batchId string) (*Batch, error)
+	CancelBatch(ctx context.Context, batchId string) (*Batch, error)
+	ListBatches(ctx context.Context, params *ListBatchesParams) (*ListBatchesResponse, error)
 }

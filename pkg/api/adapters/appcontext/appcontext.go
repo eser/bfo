@@ -12,6 +12,7 @@ import (
 	"github.com/eser/ajan/metricsfx"
 
 	"github.com/eser/bfo/pkg/api/adapters/dynamodb_store"
+	"github.com/eser/bfo/pkg/api/adapters/providers"
 	"github.com/eser/bfo/pkg/api/adapters/sqs_queue"
 	"github.com/eser/bfo/pkg/api/business/resources"
 	"github.com/eser/bfo/pkg/api/business/tasks"
@@ -25,7 +26,7 @@ type AppContext struct {
 	Metrics *metricsfx.MetricsProvider
 	// Queue   *queuefx.Registry
 	SqsQueue      *sqs_queue.Queue
-	DynamoDBStore *dynamodb_store.Store
+	DynamoDbStore *dynamodb_store.Store
 
 	Resources *resources.Service
 	Tasks     *tasks.Service
@@ -65,10 +66,18 @@ func NewAppContext() (*AppContext, error) {
 	appContext.SqsQueue = sqs_queue.New(&appContext.Config.SqsQueue, appContext.Logger)
 
 	// dynamodb store
-	appContext.DynamoDBStore = dynamodb_store.New(&appContext.Config.DynamoDBStore, appContext.Logger)
+	appContext.DynamoDbStore = dynamodb_store.New(&appContext.Config.DynamoDbStore, appContext.Logger)
 
-	// services
+	// resources
 	appContext.Resources = resources.NewService(appContext.Logger)
+	appContext.Resources.AddProvider("mock", func(resourceDef *resources.ResourceDef) resources.Provider {
+		return &providers.MockClient{}
+	})
+	appContext.Resources.AddProvider("openai", func(resourceDef *resources.ResourceDef) resources.Provider {
+		return providers.NewOpenAiClient(resourceDef)
+	})
+
+	// tasks
 	appContext.Tasks = tasks.NewService(&appContext.Config.Tasks, appContext.Logger, appContext.SqsQueue)
 
 	return appContext, nil
@@ -91,7 +100,7 @@ func (a *AppContext) Init(ctx context.Context) error {
 
 	// dynamodb store
 
-	err := a.DynamoDBStore.Init(ctx)
+	err := a.DynamoDbStore.Init(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
@@ -117,15 +126,15 @@ func (a *AppContext) Init(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
 
-	// err = a.DynamoDBStore.PutWorkerPoolState(ctx, &worker_pools.WorkerPoolState{
-	// 	PoolID: "default",
+	// err = a.DynamoDbStore.PutWorkerPoolState(ctx, &worker_pools.WorkerPoolState{
+	// 	PoolId: "default",
 	// 	State:  []byte("non-default"),
 	// })
 	// if err != nil {
 	// 	return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	// }
 
-	// state, err := a.DynamoDBStore.GetWorkerPoolState(ctx, "default")
+	// state, err := a.DynamoDbStore.GetWorkerPoolState(ctx, "default")
 	// a.Logger.InfoContext(ctx, "Worker pool state", "state", string(state.State))
 	// if err != nil {
 	// 	return fmt.Errorf("%w: %w", ErrInitFailed, err)

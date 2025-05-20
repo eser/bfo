@@ -28,7 +28,7 @@ func RegisterHttpRoutesForSite( //nolint:funlen
 				}
 
 				// override task id
-				task.ID = idParam
+				task.Id = idParam
 
 				err = appContext.Tasks.DispatchTask(ctx.Request.Context(), task)
 

@@ -19,7 +19,7 @@ func NewEndpointResolver(endpointURL string) *EndpointResolver {
 	return &EndpointResolver{endpointURL: endpointURL}
 }
 
-// ResolveEndpoint resolves the endpoint for DynamoDB.
+// ResolveEndpoint resolves the endpoint for DynamoDb.
 func (r *EndpointResolver) ResolveEndpoint(ctx context.Context, params dynamodb.EndpointParameters) (smithyendpoints.Endpoint, error) {
 	if r.endpointURL == "" {
 		// Fallback to default resolver if no custom endpoint is configured.

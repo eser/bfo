@@ -1,4 +1,4 @@
-package batching
+package providers
 
 import (
 	"bytes"
@@ -10,31 +10,44 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/eser/bfo/pkg/api/business/resources"
 	"github.com/google/go-querystring/query"
 )
 
-var _ Batcher = (*OpenAiClient)(nil)
+var _ Provider = (*OpenAiClient)(nil)
+
+const (
+	DefaultTimeout = 30 * time.Second
+)
 
 type OpenAiClient struct {
-	httpClient *http.Client
-	config     Config
+	resourceDef *resources.ResourceDef
+	httpClient  *http.Client
 }
 
-func NewOpenAiClient(config Config) *OpenAiClient {
+func NewOpenAiClient(resourceDef *resources.ResourceDef) *OpenAiClient {
+	timeout := resourceDef.RequestTimeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
+
 	return &OpenAiClient{
-		config:     config,
-		httpClient: &http.Client{Timeout: config.Timeout},
+		resourceDef: resourceDef,
+		httpClient: &http.Client{
+			Timeout: timeout,
+		},
 	}
 }
 
 func (c *OpenAiClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	reqURL := c.config.BaseURL + path
+	reqURL := c.resourceDef.BaseUrl + path
 	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
+	req.Header.Set("Authorization", "Bearer "+c.resourceDef.ApiKey)
 	return req, nil
 }
 
@@ -60,7 +73,7 @@ func (c *OpenAiClient) do(req *http.Request, v any) error {
 
 // CreateFile uploads a file that can be used across OpenAI services.
 // The file path provided should be an absolute path or relative to the execution directory.
-func (c *OpenAiClient) CreateFile(ctx context.Context, filePath string, purpose string) (*File, error) {
+func (c *OpenAiClient) CreateFile(ctx context.Context, filePath string, purpose string) (*resources.File, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %s: %w", filePath, err)
@@ -96,7 +109,7 @@ func (c *OpenAiClient) CreateFile(ctx context.Context, filePath string, purpose 
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	var resultFile File
+	var resultFile resources.File
 	if err := c.do(req, &resultFile); err != nil {
 		return nil, err
 	}
@@ -104,7 +117,7 @@ func (c *OpenAiClient) CreateFile(ctx context.Context, filePath string, purpose 
 }
 
 // CreateBatch creates and executes a batch from an uploaded file.
-func (c *OpenAiClient) CreateBatch(ctx context.Context, batchReq CreateBatchRequest) (*Batch, error) {
+func (c *OpenAiClient) CreateBatch(ctx context.Context, batchReq resources.CreateBatchRequest) (*resources.Batch, error) {
 	jsonBody, err := json.Marshal(batchReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal create batch request: %w", err)
@@ -116,7 +129,7 @@ func (c *OpenAiClient) CreateBatch(ctx context.Context, batchReq CreateBatchRequ
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	var batch Batch
+	var batch resources.Batch
 	if err := c.do(req, &batch); err != nil {
 		return nil, err
 	}
@@ -124,15 +137,15 @@ func (c *OpenAiClient) CreateBatch(ctx context.Context, batchReq CreateBatchRequ
 }
 
 // RetrieveBatch retrieves a batch.
-func (c *OpenAiClient) RetrieveBatch(ctx context.Context, batchID string) (*Batch, error) {
-	path := fmt.Sprintf("/batches/%s", batchID)
+func (c *OpenAiClient) RetrieveBatch(ctx context.Context, batchId string) (*resources.Batch, error) {
+	path := fmt.Sprintf("/batches/%s", batchId)
 
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var batch Batch
+	var batch resources.Batch
 	if err := c.do(req, &batch); err != nil {
 		return nil, err
 	}
@@ -141,15 +154,15 @@ func (c *OpenAiClient) RetrieveBatch(ctx context.Context, batchID string) (*Batc
 }
 
 // CancelBatch cancels an in-progress batch.
-func (c *OpenAiClient) CancelBatch(ctx context.Context, batchID string) (*Batch, error) {
-	path := fmt.Sprintf("/batches/%s/cancel", batchID)
+func (c *OpenAiClient) CancelBatch(ctx context.Context, batchId string) (*resources.Batch, error) {
+	path := fmt.Sprintf("/batches/%s/cancel", batchId)
 
 	req, err := c.newRequest(ctx, http.MethodPost, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var batch Batch
+	var batch resources.Batch
 	if err := c.do(req, &batch); err != nil {
 		return nil, err
 	}
@@ -157,7 +170,7 @@ func (c *OpenAiClient) CancelBatch(ctx context.Context, batchID string) (*Batch,
 	return &batch, nil
 }
 
-func (c *OpenAiClient) ListBatches(ctx context.Context, params *ListBatchesParams) (*ListBatchesResponse, error) {
+func (c *OpenAiClient) ListBatches(ctx context.Context, params *resources.ListBatchesParams) (*resources.ListBatchesResponse, error) {
 	path := "/batches"
 	if params != nil {
 		q, err := query.Values(params)
@@ -174,7 +187,7 @@ func (c *OpenAiClient) ListBatches(ctx context.Context, params *ListBatchesParam
 		return nil, err
 	}
 
-	var response ListBatchesResponse
+	var response resources.ListBatchesResponse
 	if err := c.do(req, &response); err != nil {
 		return nil, err
 	}
