@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/eser/ajan/logfx"
 	"github.com/eser/bfo/pkg/api/adapters/sqs_queue"
@@ -18,6 +19,16 @@ var (
 	ErrFailedToReceiveMessages  = errors.New("failed to receive messages from task queue")
 	ErrFailedToDeleteMessage    = errors.New("failed to delete message from task queue")
 	ErrFailedToExecuteProcessFn = errors.New("failed to execute process function")
+)
+
+type TaskResult int
+
+const (
+	TaskResultSuccess TaskResult = iota
+	TaskResultMessageTemporarilyFailed
+	TaskResultMessagePermanentlyFailed
+	TaskResultSystemTemporarilyFailed
+	TaskResultSystemPermanentlyFailed
 )
 
 type ServiceContext struct {
@@ -66,7 +77,7 @@ func (s *Service) DispatchTask(ctx context.Context, task Task) error {
 	return nil
 }
 
-func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Context, task Task) error) error {
+func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Context, task Task) (TaskResult, error)) error {
 	if s.Context == nil {
 		return ErrDispatchTaskBeforeInit
 	}
@@ -77,21 +88,47 @@ func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Conte
 	}
 
 	for _, message := range messages {
-		var task Task
-		err = json.Unmarshal([]byte(message.Body), &task)
-		if err != nil {
-			return fmt.Errorf("%w: %w", ErrFailedToUnmarshalTask, err)
-		}
+		go func() {
+			var task Task
+			err = json.Unmarshal([]byte(message.Body), &task)
+			if err != nil {
+				s.logger.ErrorContext(ctx, "Failed to unmarshal task", "message", message.Body, "error", err)
 
-		err = fn(ctx, task)
-		if err != nil {
-			return fmt.Errorf("%w: %w", ErrFailedToExecuteProcessFn, err)
-		}
+				return
+			}
 
-		err = s.sqsQueue.DeleteMessage(ctx, *s.Context.taskQueueURL, message.ReceiptHandle)
-		if err != nil {
-			return fmt.Errorf("%w: %w", ErrFailedToDeleteMessage, err)
-		}
+			// TODO(@eser) mark task as in progress
+			s.logger.InfoContext(ctx, "Processing task", "task", task.Id)
+
+			taskResult, err := fn(ctx, task)
+
+			// TODO(@eser) update task status depending on taskResult
+
+			if err != nil {
+				s.logger.ErrorContext(ctx, "Failed to execute process function", "task", task.Id, "error", err)
+
+				return
+			}
+
+			if taskResult == TaskResultSystemTemporarilyFailed {
+				s.logger.InfoContext(ctx, "Task failed temporarily, sleeping for 5 seconds", "task", task.Id)
+				time.Sleep(5 * time.Second)
+
+				return
+			}
+
+			if taskResult == TaskResultSuccess {
+				s.logger.InfoContext(ctx, "Task completed successfully", "task", task.Id)
+
+				err = s.sqsQueue.DeleteMessage(ctx, *s.Context.taskQueueURL, message.ReceiptHandle)
+
+				if err != nil {
+					s.logger.ErrorContext(ctx, "Failed to delete message from task queue", "receiptHandle", message.ReceiptHandle, "error", err)
+
+					return
+				}
+			}
+		}()
 	}
 
 	return nil

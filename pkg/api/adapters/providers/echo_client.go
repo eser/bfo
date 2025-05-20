@@ -16,25 +16,21 @@ import (
 	"github.com/google/go-querystring/query"
 )
 
-var _ Provider = (*OpenAiClient)(nil)
+var _ Provider = (*EchoClient)(nil)
 
-type OpenAiClient struct {
-	config     *resources.ConfigResource
-	logger     *logfx.Logger
-	httpClient *http.Client
+type EchoClient struct {
+	config *resources.ConfigResource
+	logger *logfx.Logger
 }
 
-func NewOpenAiClient(config *resources.ConfigResource, logger *logfx.Logger) *OpenAiClient {
-	return &OpenAiClient{
+func NewEchoClient(config *resources.ConfigResource, logger *logfx.Logger) *EchoClient {
+	return &EchoClient{
 		config: config,
 		logger: logger,
-		httpClient: &http.Client{
-			Timeout: config.RequestTimeout,
-		},
 	}
 }
 
-func (c *OpenAiClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
+func (c *EchoClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
 	reqURL := c.config.BaseUrl + path
 	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
 	if err != nil {
@@ -44,29 +40,15 @@ func (c *OpenAiClient) newRequest(ctx context.Context, method, path string, body
 	return req, nil
 }
 
-func (c *OpenAiClient) do(req *http.Request, v any) error {
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck
+func (c *EchoClient) do(req *http.Request, v any) error {
+	c.logger.Info("[EchoClient] Sending request", "method", req.Method, "url", req.URL.String())
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("api request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	if v != nil {
-		if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
-			return fmt.Errorf("failed to decode response: %w", err)
-		}
-	}
 	return nil
 }
 
 // CreateFile uploads a file that can be used across OpenAI services.
 // The file path provided should be an absolute path or relative to the execution directory.
-func (c *OpenAiClient) CreateFile(ctx context.Context, filePath string, purpose string) (*resources.File, error) {
+func (c *EchoClient) CreateFile(ctx context.Context, filePath string, purpose string) (*resources.File, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %s: %w", filePath, err)
@@ -110,7 +92,7 @@ func (c *OpenAiClient) CreateFile(ctx context.Context, filePath string, purpose 
 }
 
 // CreateBatch creates and executes a batch from an uploaded file.
-func (c *OpenAiClient) CreateBatch(ctx context.Context, batchReq resources.CreateBatchRequest) (*resources.Batch, error) {
+func (c *EchoClient) CreateBatch(ctx context.Context, batchReq resources.CreateBatchRequest) (*resources.Batch, error) {
 	jsonBody, err := json.Marshal(batchReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal create batch request: %w", err)
@@ -130,7 +112,7 @@ func (c *OpenAiClient) CreateBatch(ctx context.Context, batchReq resources.Creat
 }
 
 // RetrieveBatch retrieves a batch.
-func (c *OpenAiClient) RetrieveBatch(ctx context.Context, batchId string) (*resources.Batch, error) {
+func (c *EchoClient) RetrieveBatch(ctx context.Context, batchId string) (*resources.Batch, error) {
 	path := fmt.Sprintf("/batches/%s", batchId)
 
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil)
@@ -147,7 +129,7 @@ func (c *OpenAiClient) RetrieveBatch(ctx context.Context, batchId string) (*reso
 }
 
 // CancelBatch cancels an in-progress batch.
-func (c *OpenAiClient) CancelBatch(ctx context.Context, batchId string) (*resources.Batch, error) {
+func (c *EchoClient) CancelBatch(ctx context.Context, batchId string) (*resources.Batch, error) {
 	path := fmt.Sprintf("/batches/%s/cancel", batchId)
 
 	req, err := c.newRequest(ctx, http.MethodPost, path, nil)
@@ -163,7 +145,7 @@ func (c *OpenAiClient) CancelBatch(ctx context.Context, batchId string) (*resour
 	return &batch, nil
 }
 
-func (c *OpenAiClient) ListBatches(ctx context.Context, params *resources.ListBatchesParams) (*resources.ListBatchesResponse, error) {
+func (c *EchoClient) ListBatches(ctx context.Context, params *resources.ListBatchesParams) (*resources.ListBatchesResponse, error) {
 	path := "/batches"
 	if params != nil {
 		q, err := query.Values(params)

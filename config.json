@@ -2,7 +2,7 @@
   "name": "bfo",
   "resources": {
     "azure": {
-      "provider": "mock",
+      "provider": "echo",
       "api_key": "1234567890",
       "max_concurrency": 8,
       "models": {
@@ -25,7 +25,7 @@
       }
     },
     "aws": {
-      "provider": "mock",
+      "provider": "echo",
       "api_key": "1234567890",
       "models": {
         "gpt-4o-mini": {

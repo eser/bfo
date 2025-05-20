@@ -74,7 +74,10 @@ func NewAppContext() (*AppContext, error) {
 		return &providers.MockClient{}
 	})
 	appContext.Resources.AddProvider("openai", func(config *resources.ConfigResource) resources.Provider {
-		return providers.NewOpenAiClient(config)
+		return providers.NewOpenAiClient(config, appContext.Logger)
+	})
+	appContext.Resources.AddProvider("echo", func(config *resources.ConfigResource) resources.Provider {
+		return providers.NewEchoClient(config, appContext.Logger)
 	})
 
 	// tasks
@@ -144,9 +147,14 @@ func (a *AppContext) Init(ctx context.Context) error {
 }
 
 func (a *AppContext) Tick(ctx context.Context) error {
-	err := a.Tasks.ProcessNextTask(ctx, func(innerCtx context.Context, task tasks.Task) error {
-		a.Logger.InfoContext(innerCtx, "Processing task", "task", task)
-		return nil
+	err := a.Tasks.ProcessNextTask(ctx, func(innerCtx context.Context, task tasks.Task) (tasks.TaskResult, error) {
+		taskResult, err := a.Resources.ProcessTask(innerCtx, task)
+
+		if err != nil {
+			return tasks.TaskResultSystemPermanentlyFailed, fmt.Errorf("failed to process task: %w", err)
+		}
+
+		return taskResult, nil
 	})
 
 	return err

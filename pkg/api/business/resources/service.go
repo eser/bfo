@@ -1,9 +1,11 @@
 package resources
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/eser/ajan/logfx"
+	"github.com/eser/bfo/pkg/api/business/tasks"
 )
 
 type ProviderFn = func(config *ConfigResource) Provider
@@ -59,4 +61,46 @@ func (s *Service) Init() error {
 	s.logger.Debug("[Resources] Resources loaded from config", "module", "resources")
 
 	return nil
+}
+
+func (s *Service) FindBestAvailableResource(ctx context.Context, task tasks.Task) (Provider, error) {
+	s.logger.DebugContext(ctx, "[Resources] Finding best available resource", "module", "resources", "task", task)
+
+	for key, resource := range s.resources {
+		s.logger.DebugContext(ctx, "[Resources] Checking resource", "module", "resources", "resource", key)
+
+		if true { // resource.IsAvailable()
+			s.logger.DebugContext(ctx, "[Resources] Found available resource", "module", "resources", "resource", resource)
+
+			return resource, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func (s *Service) ProcessTask(ctx context.Context, task tasks.Task) (tasks.TaskResult, error) {
+	s.logger.DebugContext(ctx, "[Resources] Processing task", "module", "resources", "task", task)
+
+	provider, err := s.FindBestAvailableResource(ctx, task)
+	if err != nil {
+		return tasks.TaskResultSystemTemporarilyFailed, fmt.Errorf("failed to find available resource: %w", err)
+	}
+
+	if provider == nil {
+		// return fmt.Errorf("no available resources found for task id '%s'", task.Id)
+		s.logger.InfoContext(ctx, "[Resources] No available resources found", "module", "resources", "task", task)
+		return tasks.TaskResultSystemTemporarilyFailed, nil
+	}
+
+	batch, err := provider.CreateBatch(ctx, CreateBatchRequest{})
+	if err != nil {
+		s.logger.ErrorContext(ctx, "[Resources] Failed to create batch", "module", "resources", "task", task, "error", err)
+		// return fmt.Errorf("failed to create batch: %w", err)
+		return tasks.TaskResultSystemTemporarilyFailed, nil
+	}
+
+	s.logger.DebugContext(ctx, "[Resources] Created batch", "module", "resources", "batch", batch)
+
+	return tasks.TaskResultSuccess, nil
 }
