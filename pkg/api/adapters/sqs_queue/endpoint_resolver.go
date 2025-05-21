@@ -11,32 +11,31 @@ import (
 )
 
 // EndpointResolver implements the sqs.EndpointResolverV2 interface to provide a custom endpoint.
+var _ sqs.EndpointResolverV2 = (*EndpointResolver)(nil)
+
 type EndpointResolver struct {
-	endpointURL string
+	endpointUrl string
 }
 
-func NewEndpointResolver(endpointURL string) *EndpointResolver {
-	return &EndpointResolver{endpointURL: endpointURL}
+func NewEndpointResolver(endpointUrl string) *EndpointResolver {
+	return &EndpointResolver{endpointUrl: endpointUrl}
 }
 
 // ResolveEndpoint resolves the endpoint for SQS.
 func (r *EndpointResolver) ResolveEndpoint(ctx context.Context, params sqs.EndpointParameters) (smithyendpoints.Endpoint, error) {
-	if r.endpointURL == "" {
+	if r.endpointUrl == "" {
 		// Fallback to default resolver if no custom endpoint is configured.
-		// This path should ideally not be reached if EndpointResolver is only instantiated when endpointURL is non-empty.
+		// This path should ideally not be reached if EndpointResolver is only instantiated when endpointUrl is non-empty.
 		return sqs.NewDefaultEndpointResolverV2().ResolveEndpoint(ctx, params)
 	}
 
-	parsedURL, err := url.Parse(r.endpointURL)
+	parsedUrl, err := url.Parse(r.endpointUrl)
 	if err != nil {
 		// Wrap the error for clarity, or return a more specific error if needed.
-		return smithyendpoints.Endpoint{}, &aws.EndpointNotFoundError{Err: fmt.Errorf("failed to parse custom endpoint URL '%s': %w", r.endpointURL, err)}
+		return smithyendpoints.Endpoint{}, &aws.EndpointNotFoundError{Err: fmt.Errorf("failed to parse custom endpoint Url '%s': %w", r.endpointUrl, err)}
 	}
 
 	return smithyendpoints.Endpoint{
-		URI: *parsedURL,
+		URI: *parsedUrl,
 	}, nil
 }
-
-// Ensure EndpointResolver implements the interface.
-var _ sqs.EndpointResolverV2 = (*EndpointResolver)(nil)

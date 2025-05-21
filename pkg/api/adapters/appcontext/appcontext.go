@@ -99,7 +99,7 @@ func (a *AppContext) Init(ctx context.Context) error {
 
 	// sqs queue
 
-	taskQueueURL, err := a.SqsQueue.Init(ctx)
+	taskQueueUrl, err := a.SqsQueue.Init(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
@@ -113,7 +113,7 @@ func (a *AppContext) Init(ctx context.Context) error {
 
 	// tasks
 
-	err = a.Tasks.Init(*taskQueueURL)
+	err = a.Tasks.Init(*taskQueueUrl)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}

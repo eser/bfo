@@ -33,8 +33,8 @@ func NewOpenAiClient(config *resources.ConfigResource, logger *logfx.Logger) *Op
 }
 
 func (c *OpenAiClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	reqURL := c.config.BaseUrl + path
-	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
+	reqUrl := c.config.BaseUrl + path
+	req, err := http.NewRequestWithContext(ctx, method, reqUrl, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

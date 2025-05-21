@@ -33,7 +33,7 @@ const (
 )
 
 type ServiceContext struct {
-	taskQueueURL *string
+	taskQueueUrl *string
 }
 
 type Service struct {
@@ -48,8 +48,8 @@ func NewService(config *Config, logger *logfx.Logger, sqsQueue *sqs_queue.Queue,
 	return &Service{Config: config, logger: logger, sqsQueue: sqsQueue, taskStatusStore: taskStatusStore}
 }
 
-func (s *Service) Init(taskQueueURL string) error {
-	s.Context = &ServiceContext{taskQueueURL: &taskQueueURL}
+func (s *Service) Init(taskQueueUrl string) error {
+	s.Context = &ServiceContext{taskQueueUrl: &taskQueueUrl}
 
 	return nil
 }
@@ -93,7 +93,7 @@ func (s *Service) DispatchTask(ctx context.Context, task Task) error {
 		return fmt.Errorf("failed to create initial task status for %s: %w", task.Id, err)
 	}
 
-	err = s.sqsQueue.SendMessage(ctx, *s.Context.taskQueueURL, string(taskJSON))
+	err = s.sqsQueue.SendMessage(ctx, *s.Context.taskQueueUrl, string(taskJSON))
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFailedToSendMessage, err)
 	}
@@ -106,7 +106,7 @@ func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Conte
 		return ErrDispatchTaskBeforeInit
 	}
 
-	messages, err := s.sqsQueue.ReceiveMessages(ctx, *s.Context.taskQueueURL)
+	messages, err := s.sqsQueue.ReceiveMessages(ctx, *s.Context.taskQueueUrl)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrFailedToReceiveMessages, err)
 	}
@@ -162,7 +162,7 @@ func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Conte
 				// If it doesn't, we'd set it here, e.g., finalStatusUpdate["Status"] = "submitted_to_batch_processor"
 
 				// Delete message from SQS only if successfully handed off
-				err = s.sqsQueue.DeleteMessage(ctx, *s.Context.taskQueueURL, message.ReceiptHandle)
+				err = s.sqsQueue.DeleteMessage(ctx, *s.Context.taskQueueUrl, message.ReceiptHandle)
 				if err != nil {
 					s.logger.ErrorContext(ctx, "[Tasks] Failed to delete SQS message after successful hand-off", "module", "tasks", "task_id", task.Id, "receiptHandle", message.ReceiptHandle, "error", err)
 					// This is problematic: task is processed but SQS message might reappear.
@@ -182,7 +182,7 @@ func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Conte
 				s.logger.ErrorContext(ctx, "[Tasks] Task processing failed permanently (message)", "module", "tasks", "task_id", task.Id)
 				finalStatusUpdate["Status"] = "failed_worker_message_permanent"
 				// Delete SQS message as it cannot be processed.
-				err = s.sqsQueue.DeleteMessage(ctx, *s.Context.taskQueueURL, message.ReceiptHandle)
+				err = s.sqsQueue.DeleteMessage(ctx, *s.Context.taskQueueUrl, message.ReceiptHandle)
 				if err != nil {
 					s.logger.ErrorContext(ctx, "[Tasks] Failed to delete SQS message for permanently failed task", "module", "tasks", "task_id", task.Id, "error", err)
 				}
@@ -190,7 +190,7 @@ func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Conte
 				s.logger.ErrorContext(ctx, "[Tasks] Unknown task result from worker", "module", "tasks", "task_id", task.Id, "result", taskResult)
 				finalStatusUpdate["Status"] = "failed_worker_unknown_result"
 				// Delete SQS message to prevent reprocessing an unknown state.
-				err = s.sqsQueue.DeleteMessage(ctx, *s.Context.taskQueueURL, message.ReceiptHandle)
+				err = s.sqsQueue.DeleteMessage(ctx, *s.Context.taskQueueUrl, message.ReceiptHandle)
 				if err != nil {
 					s.logger.ErrorContext(ctx, "[Tasks] Failed to delete SQS message for task with unknown result", "module", "tasks", "task_id", task.Id, "error", err)
 				}
