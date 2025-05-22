@@ -1,55 +1,60 @@
 {
   "name": "bfo",
   "resources": {
-    "azure": {
+    "vertex_dev": {
       "provider": "echo",
-      "api_key": "1234567890",
-      "max_concurrency": 8,
+      "period": "1m",
+      "properties": {
+        "service_account": "some json"
+      },
       "models": {
-        "gemini-2.5-pro": {},
-        "gemini-2.5-flash": {},
-        "gemini-2.5-preview": {
-          "batching": false
+        "gemini-2.5-pro-preview-05-06": {
+          "max_input_token": "1048576",
+          "max_size_per_file": "50M"
+        },
+        "gemini-2.5-flash-preview-05-20": {
+          "max_input_token": "1048576",
+          "max_size_per_file": "50M"
+        },
+        "gemini-2.0-flash": {
+          "max_input_token": "1048576",
+          "max_size_per_file": "50M",
+          "max_tokens_per_minute": "3400K"
+        },
+        "gemini-2.0-flash-lite": {
+          "max_input_token": "1048576",
+          "max_size_per_file": "50M",
+          "max_tokens_per_minute": "3400K"
         }
       },
       "instances": {
-        "1": {
-          "region": "us-central1"
+        "europe-central2": {
+          "region": "europe-central2"
         },
-        "2": {
-          "region": "europe-west4"
-        },
-        "3": {
-          "region": "asia-southeast1"
+        "europe-west1": {
+          "region": "europe-west1"
         }
       }
     },
-    "aws": {
-      "provider": "echo",
-      "api_key": "1234567890",
-      "models": {
-        "gpt-4o-mini": {
-          "enqueued_token_limit": 10000
-        },
-        "gpt-4o": {
-          "enqueued_token_limit": 10000
-        },
-        "gpt-o4-high": {
-          "batching": false,
-          "enqueued_token_limit": 10000
-        }
-      },
+    "azure": {
+      "provider": "microsoft",
+      "disabled": true,
       "instances": {
-        "1": {
-          "region": "westus",
+        "swedencentral": {
+          "region": "swedencentral",
+          "properties": {
+            "base_uri": "https://any-gpt-sweden-central.openai.azure.com/",
+            "api_key": "1234567890",
+            "api_version": "2025-01-01-preview",
+            "deployment": "gpt-4o-global-batch"
+          },
+          "max_input_token": "200M",
+          "max_files_per_resource": "500",
+          "max_size_per_file": "200M",
+          "max_requests_per_file": "100K",
           "models": {
-            "gpt-4o-mini": {
-              "enqueued_token_limit": 5000
-            }
+            "gpt-4o": {}
           }
-        },
-        "2": {
-          "region": "swedencentral"
         }
       }
     }

@@ -29,12 +29,11 @@ func NewEchoClient(config *resources.ConfigResource, logger *logfx.Logger) *Echo
 }
 
 func (c *EchoClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	reqUrl := c.config.BaseUrl + path
+	reqUrl := "//" + path
 	req, err := http.NewRequestWithContext(ctx, method, reqUrl, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.config.ApiKey)
 	return req, nil
 }
 

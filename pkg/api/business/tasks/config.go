@@ -3,12 +3,12 @@ package tasks
 import "time"
 
 type RetryPolicy struct {
-	MaxAttempts   int           `conf:"MAX_ATTEMPTS" default:"2"`
-	BackoffPeriod time.Duration `conf:"BACKOFF_PERIOD" default:"3s"`
+	MaxAttempts   int           `conf:"max_attempts" default:"2"`
+	BackoffPeriod time.Duration `conf:"backoff_period" default:"3s"`
 }
 
 type Config struct {
-	DefaultMaxTokens int `conf:"DEFAULT_MAX_TOKENS" default:"1000"`
+	DefaultMaxTokens int `conf:"default_max_tokens" default:"1000"`
 
-	RetryPolicy RetryPolicy `conf:"RETRY_POLICY"`
+	RetryPolicy RetryPolicy `conf:"retry_policy"`
 }

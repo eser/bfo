@@ -1,7 +1,7 @@
 package dynamodb_store
 
 type Config struct {
-	ConnectionEndpoint string `conf:"CONNECTION_ENDPOINT" default:"http://localhost:4566"`
-	ConnectionProfile  string `conf:"CONNECTION_PROFILE" default:"default"`
-	ConnectionRegion   string `conf:"CONNECTION_REGION" default:"eu-west-1"`
+	ConnectionEndpoint string `conf:"connection_endpoint" default:"http://localhost:4566"`
+	ConnectionProfile  string `conf:"connection_profile" default:"default"`
+	ConnectionRegion   string `conf:"connection_region" default:"eu-west-1"`
 }

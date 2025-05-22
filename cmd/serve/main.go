@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/eser/ajan/processfx"
 	"github.com/eser/bfo/pkg/api/adapters/appcontext"
@@ -9,14 +10,10 @@ import (
 )
 
 func main() {
-	appContext, err := appcontext.NewAppContext()
-	if err != nil {
-		panic(err)
-	}
-
+	appContext := appcontext.NewAppContext()
 	baseCtx := context.Background()
 
-	err = appContext.Init(baseCtx)
+	err := appContext.Init(baseCtx)
 	if err != nil {
 		panic(err)
 	}
@@ -30,7 +27,11 @@ func main() {
 		)
 
 		if err != nil {
-			appContext.Logger.ErrorContext(ctx, "[Main] HTTP server run failed", "module", "main", "error", err)
+			appContext.Logger.ErrorContext(
+				ctx,
+				"[Main] HTTP server run failed",
+				slog.String("module", "main"),
+				slog.Any("error", err))
 		}
 
 		defer cleanup()
@@ -50,7 +51,11 @@ func main() {
 				err := appContext.Tick(ctx)
 
 				if err != nil {
-					appContext.Logger.ErrorContext(ctx, "[Main] Error during tick", "module", "main", "error", err)
+					appContext.Logger.ErrorContext(
+						ctx,
+						"[Main] Error during tick",
+						slog.String("module", "main"),
+						slog.Any("error", err))
 
 					return err
 				}

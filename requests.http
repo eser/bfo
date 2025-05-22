@@ -1,11 +1,31 @@
-PUT http://localhost:8080/tasks/demo
+PUT http://localhost:8080/api/app-visibility-v1/schema
 Content-Type: application/json
 
 {
+  "default_priority": 5,
+  "default_sla_seconds": 43200,
+  "retry_policy": { "max_attempts": 3 },
+  "hooks": {
+    "result": "https://app/api/batch/result",
+    "refresh": "https://app/api/batch/refresh"
+  }
+}
+
+---
+
+PUT http://localhost:8080/api/app-visibility-v1/tasks/12345
+Content-Type: application/json
+
+{
+  "model": "gpt-3.5-turbo",
+  "max_tokens": 500,
+  "temperature": 0.7,
   "messages": [
     { "role": "system", "content": "foo" },
     { "role": "user", "content": "bar" },
     { "role": "user", "content": "baz" }
   ],
-  "max_tokens": 500
+
+  "priority": 5,
+  "sla_seconds": 43200, // fallback to online mode if this one exists
 }

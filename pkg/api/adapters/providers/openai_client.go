@@ -24,21 +24,19 @@ type OpenAiClient struct {
 
 func NewOpenAiClient(config *resources.ConfigResource, logger *logfx.Logger) *OpenAiClient {
 	return &OpenAiClient{
-		config: config,
-		logger: logger,
-		httpClient: &http.Client{
-			Timeout: config.RequestTimeout,
-		},
+		config:     config,
+		logger:     logger,
+		httpClient: &http.Client{},
 	}
 }
 
 func (c *OpenAiClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	reqUrl := c.config.BaseUrl + path
+	reqUrl := c.config.Properties["BASE_URL"] + path
 	req, err := http.NewRequestWithContext(ctx, method, reqUrl, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.config.ApiKey)
+	req.Header.Set("Authorization", "Bearer "+c.config.Properties["API_KEY"])
 	return req, nil
 }
 

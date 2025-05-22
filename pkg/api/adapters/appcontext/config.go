@@ -9,19 +9,19 @@ import (
 )
 
 type FeatureFlags struct {
-	Dummy bool `conf:"DUMMY" default:"false"` // dummy feature flag
+	Dummy bool `conf:"dummy" default:"false"` // dummy feature flag
 }
 
 type AppConfig struct {
-	Resources resources.Config `conf:"RESOURCES"`
+	Resources resources.Config `conf:"resources"`
 
-	DynamoDbStore dynamodb_store.Config `conf:"DYNAMODB_STORE"`
+	DynamoDbStore dynamodb_store.Config `conf:"dynamodb_store"`
 
-	SqsQueue sqs_queue.Config `conf:"SQS_QUEUE"`
+	SqsQueue sqs_queue.Config `conf:"sqs_queue"`
 
 	ajan.BaseConfig
 
-	Tasks tasks.Config `conf:"TASKS"`
+	Tasks tasks.Config `conf:"tasks"`
 
-	Features FeatureFlags `conf:"FEATURES"`
+	Features FeatureFlags `conf:"features"`
 }

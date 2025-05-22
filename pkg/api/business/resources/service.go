@@ -40,6 +40,12 @@ func (s *Service) AddProvider(key string, providerFn ProviderFn) {
 }
 
 func (s *Service) AddResource(key string, config ConfigResource) error {
+	if config.Disabled {
+		s.logger.Debug("[Resources] Resource is disabled, skipping...", "module", "resources", "key", key, "config", config)
+
+		return nil
+	}
+
 	providerFn, okProviderFn := s.providers[config.Provider]
 	if !okProviderFn {
 		return fmt.Errorf("provider '%s' not found for resource '%s'", config.Provider, key)
@@ -61,9 +67,9 @@ func (s *Service) AddResource(key string, config ConfigResource) error {
 			LastActivityTime:     time.Now().Unix(),
 			CurrentTokenLoad:     0,
 			ActiveBatches:        0,
-			MaxConcurrentBatches: config.MaxConcurrency,    // Corrected to use MaxConcurrency
-			TokensPerMinute:      config.TokensPerMinute,   // Assuming this field exists in ConfigResource
-			MaxTokensPerBatch:    config.MaxTokensPerBatch, // Assuming this field exists in ConfigResource
+			MaxConcurrentBatches: 8,    // Corrected to use MaxConcurrency
+			TokensPerMinute:      1000, // Assuming this field exists in ConfigResource
+			MaxTokensPerBatch:    1000, // Assuming this field exists in ConfigResource
 			Version:              1,
 		}
 		err = s.resourceStates.PutResourceInstanceState(context.Background(), initialState)
@@ -118,7 +124,7 @@ func (s *Service) FindBestAvailableResource(ctx context.Context, task tasks.Task
 
 	var bestResource Provider
 	var bestResourceKey string
-	// TODO: Implement more sophisticated scoring (e.g., least loaded, cheapest, specific capabilities)
+	// TODO(@eser) Implement more sophisticated scoring (e.g., least loaded, cheapest, specific capabilities)
 	// For now, pick the first one that can handle the task based on token limits and concurrency.
 
 	for key, resource := range s.resources {
@@ -148,7 +154,7 @@ func (s *Service) FindBestAvailableResource(ctx context.Context, task tasks.Task
 			continue
 		}
 
-		// TODO: Check token rate limits (TokensPerMinute) - this is more complex as it involves time windows.
+		// TODO(@eser) Check token rate limits (TokensPerMinute) - this is more complex as it involves time windows.
 		// For now, we assume if it passes concurrency and batch size, it's a candidate.
 
 		// This resource is a candidate. For now, take the first one.
@@ -186,10 +192,10 @@ func (s *Service) DispatchTask(ctx context.Context, resourceKey string, provider
 	// This would involve serializing the task into the provider-specific format for a batch request line.
 	inputFileContent := fmt.Sprintf(
 		`{"custom_id": "%s", "method": "POST", "url": "%s", "body": {"model": "%s", "messages": %s, "max_tokens": %d}}`,
-		task.Id, // custom_id
-		s.resourceConfigs[resourceKey].BatchEndpoint, // url (e.g., /v1/chat/completions)
-		s.resourceConfigs[resourceKey].Model,         // model (e.g., gpt-3.5-turbo)
-		convertMessagesToJSON(task.Messages),         // messages
+		task.Id,                              // custom_id
+		"/v1/chat/completions",               // url (e.g., /v1/chat/completions)
+		"gpt-3.5-turbo",                      // model (e.g., gpt-3.5-turbo)
+		convertMessagesToJSON(task.Messages), // messages
 		task.MaxTokens,
 	)
 
@@ -208,8 +214,8 @@ func (s *Service) DispatchTask(ctx context.Context, resourceKey string, provider
 	s.logger.InfoContext(ctx, "[Resources] Conceptual input file created for batch", "task_id", task.Id, "input_file_id", inputFileId, "content_snippet", inputFileContent[:min(100, len(inputFileContent))])
 
 	batchReq := CreateBatchRequest{
-		InputFileId:      inputFileId,                                  // This Id must come from a successful file upload to the provider
-		Endpoint:         s.resourceConfigs[resourceKey].BatchEndpoint, // e.g., "/v1/chat/completions"
+		InputFileId:      inputFileId,            // This Id must come from a successful file upload to the provider
+		Endpoint:         "/v1/chat/completions", // e.g., "/v1/chat/completions"
 		CompletionWindow: BatchCompletionWindow24h,
 		Metadata: map[string]string{
 			"task_id":      task.Id,
@@ -233,7 +239,7 @@ func (s *Service) DispatchTask(ctx context.Context, resourceKey string, provider
 	err = s.resourceStates.PutResourceInstanceState(ctx, currentState) // This should ideally use the version for optimistic lock
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[Resources] Failed to update resource state before dispatch (optimistic lock might fail here)", "resource_key", resourceKey, "error", err)
-		// TODO: Implement retry logic for optimistic locking failures if PutResourceInstanceState supports it.
+		// TODO(@eser) Implement retry logic for optimistic locking failures if PutResourceInstanceState supports it.
 		return nil, fmt.Errorf("failed to update resource state for %s: %w", resourceKey, err)
 	}
 	s.logger.InfoContext(ctx, "[Resources] Updated resource state before dispatch", "resource_key", resourceKey, "active_batches", currentState.ActiveBatches, "token_load", currentState.CurrentTokenLoad)
@@ -287,7 +293,7 @@ func convertMessagesToJSON(messages []tasks.Message) string {
 	return string(mjson)
 }
 
-func (s *Service) ProcessTask(ctx context.Context, task tasks.Task) (tasks.TaskResult, error) {
+func (s *Service) TryProcessTask(ctx context.Context, task tasks.Task) (tasks.TaskResult, error) {
 	s.logger.DebugContext(ctx, "[Resources] Processing task", "module", "resources", "task_id", task.Id)
 
 	// Generate a unique Id for the task if it doesn't have one
@@ -303,7 +309,7 @@ func (s *Service) ProcessTask(ctx context.Context, task tasks.Task) (tasks.TaskR
 	provider, resourceKey, err := s.FindBestAvailableResource(ctx, task)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[Resources] Failed to find available resource for task", "task_id", task.Id, "error", err)
-		// TODO: Update TaskStatus to reflect failure or need for retry (e.g., no resource available)
+		// TODO(@eser) Update TaskStatus to reflect failure or need for retry (e.g., no resource available)
 		return tasks.TaskResultSystemTemporarilyFailed, fmt.Errorf("failed to find available resource for task %s: %w", task.Id, err)
 	}
 	s.logger.InfoContext(ctx, "[Resources] Found best resource for task", "task_id", task.Id, "resource_key", resourceKey)
@@ -312,14 +318,14 @@ func (s *Service) ProcessTask(ctx context.Context, task tasks.Task) (tasks.TaskR
 	batch, err := s.DispatchTask(ctx, resourceKey, provider, task)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[Resources] Failed to dispatch task / create batch", "task_id", task.Id, "resource_key", resourceKey, "error", err)
-		// TODO: Update TaskStatus to reflect failure (e.g., batch creation failed)
+		// TODO(@eser) Update TaskStatus to reflect failure (e.g., batch creation failed)
 		// The resource state rollback is attempted within DispatchTask.
 		return tasks.TaskResultSystemTemporarilyFailed, fmt.Errorf("failed to dispatch task %s: %w", task.Id, err)
 	}
 
 	s.logger.InfoContext(ctx, "[Resources] Task dispatched, batch created", "module", "resources", "task_id", task.Id, "batch_id", batch.Id, "resource_key", resourceKey)
 
-	// TODO: Persist/Update Task Status
+	// TODO(@eser) Persist/Update Task Status
 	// Now that a batch is created, update the TaskStatus in the TaskStatusStore.
 	// Example:
 	// taskStatus := &tasks.TaskStatus{
@@ -342,7 +348,7 @@ func (s *Service) ProcessTask(ctx context.Context, task tasks.Task) (tasks.TaskR
 	return tasks.TaskResultSuccess, nil // Meaning: task successfully submitted for batch processing
 }
 
-// TODO: Add a new method like HandleBatchCompletion(ctx context.Context, batch Batch) error
+// TODO(@eser) Add a new method like HandleBatchCompletion(ctx context.Context, batch Batch) error
 // This method would be called by a webhook from the LLM provider or by a polling mechanism.
 // It would:
 // 1. Retrieve the batch output file(s) from provider.GetFileContent(batch.OutputFileId) and provider.GetFileContent(batch.ErrorFileId).
@@ -361,24 +367,24 @@ func (s *Service) ProcessTask(ctx context.Context, task tasks.Task) (tasks.TaskR
 //    c. Update LastActivityTime.
 //    d. Use optimistic locking (Version).
 
-// TODO: Add a polling mechanism if webhooks are not available/reliable for all providers.
+// TODO(@eser) Add a polling mechanism if webhooks are not available/reliable for all providers.
 // This poller would periodically call provider.ListBatches() and provider.RetrieveBatch()
 // to check for status changes and then trigger HandleBatchCompletion.
 
-// TODO: Implement token counting more accurately using a tokenizer library.
+// TODO(@eser) Implement token counting more accurately using a tokenizer library.
 // The current estimateTokens is very basic.
 
-// TODO: Implement more sophisticated resource selection in FindBestAvailableResource.
+// TODO(@eser) Implement more sophisticated resource selection in FindBestAvailableResource.
 // This could involve a scoring system based on current load, cost, provider-specific limits,
 // task priority, etc.
 
-// TODO: Ensure robust error handling and retries for operations involving external providers
+// TODO(@eser) Ensure robust error handling and retries for operations involving external providers
 // and database interactions. This includes handling optimistic locking failures.
 
-// TODO: Implement the actual file creation/upload logic in the provider adapters for CreateFile.
+// TODO(@eser) Implement the actual file creation/upload logic in the provider adapters for CreateFile.
 // The current DispatchTask has a placeholder for this.
 
-// TODO: Add configuration for MaxConcurrentBatches, TokensPerMinute, MaxTokensPerBatch to ConfigResource
+// TODO(@eser) Add configuration for MaxConcurrentBatches, TokensPerMinute, MaxTokensPerBatch to ConfigResource
 // and ensure they are used during resource initialization and selection.
 
 // Helper for min for slicing strings safely
@@ -386,5 +392,6 @@ func min(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }

@@ -101,7 +101,7 @@ func (s *Service) DispatchTask(ctx context.Context, task Task) error {
 	return nil
 }
 
-func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Context, task Task) (TaskResult, error)) error {
+func (s *Service) PickUpNextAvailableTask(ctx context.Context, processFn func(ctx context.Context, task Task) (TaskResult, error)) error {
 	if s.Context == nil {
 		return ErrDispatchTaskBeforeInit
 	}
@@ -118,7 +118,7 @@ func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Conte
 		err = json.Unmarshal([]byte(message.Body), &task)
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[Tasks] Failed to unmarshal task from SQS message", "module", "tasks", "message_body", message.Body, "error", err)
-			// TODO: Decide if this message should be deleted or moved to a DLQ
+			// TODO(@eser) Decide if this message should be deleted or moved to a DLQ
 			// For now, continue to the next message
 			continue
 		}
@@ -136,7 +136,7 @@ func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Conte
 			// For now, log and continue processing the task.
 		}
 
-		taskResult, processErr := fn(ctx, task) // This fn is `resources.Service.ProcessTask`
+		taskResult, processErr := processFn(ctx, task)
 
 		// Update task status based on the result from resources.Service.ProcessTask
 		// Note: resources.Service.ProcessTask itself should update TaskStatus after batch creation.
@@ -173,7 +173,7 @@ func (s *Service) ProcessNextTask(ctx context.Context, fn func(ctx context.Conte
 				finalStatusUpdate["Status"] = "retrying_worker_system_failure"
 				// Do not delete SQS message, it will be retried after visibility timeout.
 				// Increment retry count in TaskStatus.
-				// TODO: Add retry count increment logic to UpdateTaskStatus or handle here.
+				// TODO(@eser) Add retry count increment logic to UpdateTaskStatus or handle here.
 			case TaskResultMessageTemporarilyFailed: // e.g. bad input that might be fixed
 				s.logger.WarnContext(ctx, "[Tasks] Task processing failed temporarily (message)", "module", "tasks", "task_id", task.Id)
 				finalStatusUpdate["Status"] = "retrying_worker_message_failure"
