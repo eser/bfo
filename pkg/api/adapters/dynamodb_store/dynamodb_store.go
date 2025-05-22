@@ -4,19 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/eser/ajan/logfx"
 )
 
 const (
-	TaskStatusTableName    = "task_statuses"
-	ResourceStateTableName = "resource_states"
-
 	TableCreationTimeout = 2 * time.Minute
 )
 
@@ -49,35 +48,37 @@ func (s *Store) Init(ctx context.Context) error {
 
 	sdkConfig, err := config.LoadDefaultConfig(ctx, cfgOptions...)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "[DynamoDbStore] unable to load SDK config for DynamoDb", "error", err)
+		s.logger.ErrorContext(
+			ctx,
+			"[DynamoDbStore] unable to load SDK config for DynamoDb",
+			slog.String("module", "dynamodb_store"),
+			slog.Any("error", err),
+		)
 
 		return fmt.Errorf("failed to load AWS SDK config: %w", err)
 	}
 
 	s.client = dynamodb.NewFromConfig(sdkConfig, ddbClientOptions...)
 
-	// Ensure Resource Instance State table exists
-	if err := s.ensureTableExists(ctx, ResourceStateTableName, "ResourceInstanceId"); err != nil {
-		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to ensure DynamoDb table exists for resource instances", "tableName", ResourceStateTableName, "error", err)
-
-		return fmt.Errorf("failed to ensure DynamoDb table %s exists: %w", ResourceStateTableName, err)
-	}
-
-	// Ensure Task Status table exists, if configured
-	if err := s.ensureTableExists(ctx, TaskStatusTableName, "TaskId"); err != nil {
-		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to ensure DynamoDb table exists for task statuses", "tableName", TaskStatusTableName, "error", err)
-
-		return fmt.Errorf("failed to ensure DynamoDb table %s exists: %w", TaskStatusTableName, err)
-	}
-
-	s.logger.InfoContext(ctx, "[DynamoDbStore] DynamoDb Store initialized successfully", "module", "dynamodb_store", "region", s.Config.ConnectionRegion, "endpoint", s.Config.ConnectionEndpoint)
+	s.logger.InfoContext(
+		ctx,
+		"[DynamoDbStore] DynamoDb Store initialized successfully",
+		slog.String("module", "dynamodb_store"),
+		slog.String("region", s.Config.ConnectionRegion),
+		slog.String("endpoint", s.Config.ConnectionEndpoint),
+	)
 
 	return nil
 }
 
-// ensureTableExists checks if a table exists and creates it if it doesn't.
-func (s *Store) ensureTableExists(ctx context.Context, tableName string, primaryKeyAttributeName string) error {
-	s.logger.DebugContext(ctx, "[DynamoDbStore] Checking if table exists", "module", "dynamodb_store", "tableName", tableName)
+// EnsureTableExists checks if a table exists and creates it if it doesn't.
+func (s *Store) EnsureTableExists(ctx context.Context, tableName string, primaryKeyAttributeName string) error {
+	s.logger.DebugContext(
+		ctx,
+		"[DynamoDbStore] Checking if table exists",
+		slog.String("module", "dynamodb_store"),
+		slog.String("tableName", tableName),
+	)
 
 	_, err := s.client.DescribeTable(ctx, &dynamodb.DescribeTableInput{
 		TableName: aws.String(tableName),
@@ -86,15 +87,35 @@ func (s *Store) ensureTableExists(ctx context.Context, tableName string, primary
 	if err != nil {
 		var notFoundEx *types.ResourceNotFoundException
 		if errors.As(err, &notFoundEx) {
-			s.logger.InfoContext(ctx, "[DynamoDbStore] Table not found, creating table", "module", "dynamodb_store", "tableName", tableName, "primaryKey", primaryKeyAttributeName)
+			s.logger.InfoContext(
+				ctx,
+				"[DynamoDbStore] Table not found, creating table",
+				slog.String("module", "dynamodb_store"),
+				slog.String("tableName", tableName),
+				slog.String("primaryKey", primaryKeyAttributeName),
+			)
+
 			return s.createTable(ctx, tableName, primaryKeyAttributeName)
 		}
 
-		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to describe table", "module", "dynamodb_store", "tableName", tableName, "error", err)
+		s.logger.ErrorContext(
+			ctx,
+			"[DynamoDbStore] Failed to describe table",
+			slog.String("module", "dynamodb_store"),
+			slog.String("tableName", tableName),
+			slog.Any("error", err),
+		)
+
 		return fmt.Errorf("failed to describe table %s: %w", tableName, err)
 	}
 
-	s.logger.DebugContext(ctx, "[DynamoDbStore] Table already exists", "module", "dynamodb_store", "tableName", tableName)
+	s.logger.DebugContext(
+		ctx,
+		"[DynamoDbStore] Table already exists",
+		slog.String("module", "dynamodb_store"),
+		slog.String("tableName", tableName),
+	)
+
 	return nil
 }
 
@@ -119,11 +140,24 @@ func (s *Store) createTable(ctx context.Context, tableName string, primaryKeyAtt
 
 	_, err := s.client.CreateTable(ctx, input)
 	if err != nil {
-		s.logger.ErrorContext(ctx, "[DynamoDbStore] Failed to create table", "module", "dynamodb_store", "tableName", tableName, "primaryKey", primaryKeyAttributeName, "error", err)
+		s.logger.ErrorContext(
+			ctx,
+			"[DynamoDbStore] Failed to create table",
+			slog.String("module", "dynamodb_store"),
+			slog.String("tableName", tableName),
+			slog.String("primaryKey", primaryKeyAttributeName),
+			slog.Any("error", err),
+		)
+
 		return fmt.Errorf("failed to create table %s: %w", tableName, err)
 	}
 
-	s.logger.InfoContext(ctx, "[DynamoDbStore] Table creation initiated, waiting for table to become active", "module", "dynamodb_store", "tableName", tableName)
+	s.logger.InfoContext(
+		ctx,
+		"[DynamoDbStore] Table creation initiated, waiting for table to become active",
+		slog.String("module", "dynamodb_store"),
+		slog.String("tableName", tableName),
+	)
 
 	waiter := dynamodb.NewTableExistsWaiter(s.client)
 	err = waiter.Wait(ctx, &dynamodb.DescribeTableInput{
@@ -131,10 +165,161 @@ func (s *Store) createTable(ctx context.Context, tableName string, primaryKeyAtt
 	}, TableCreationTimeout)
 
 	if err != nil {
-		s.logger.ErrorContext(ctx, "[DynamoDbStore] Error waiting for table to exist", "module", "dynamodb_store", "tableName", tableName, "error", err)
+		s.logger.ErrorContext(
+			ctx,
+			"[DynamoDbStore] Error waiting for table to exist",
+			slog.String("module", "dynamodb_store"),
+			slog.String("tableName", tableName),
+			slog.Any("error", err),
+		)
+
 		return fmt.Errorf("error waiting for table %s to exist: %w", tableName, err)
 	}
 
-	s.logger.InfoContext(ctx, "[DynamoDbStore] Table created and active", "module", "dynamodb_store", "tableName", tableName)
+	s.logger.InfoContext(
+		ctx,
+		"[DynamoDbStore] Table created and active",
+		slog.String("module", "dynamodb_store"),
+		slog.String("tableName", tableName),
+	)
+
+	return nil
+}
+
+func (s *Store) GetItem(ctx context.Context, tableName string, fieldName string, fieldValue string, out any) (bool, error) {
+	s.logger.DebugContext(
+		ctx,
+		"[DynamoDbStore] Getting item",
+		slog.String("module", "dynamodb_store"),
+		slog.String("tableName", tableName),
+		slog.String("fieldName", fieldName),
+		slog.String("fieldValue", fieldValue),
+	)
+
+	key := map[string]types.AttributeValue{
+		fieldName: &types.AttributeValueMemberS{Value: fieldValue},
+	}
+
+	input := &dynamodb.GetItemInput{
+		TableName: aws.String(tableName),
+		Key:       key,
+	}
+
+	result, err := s.client.GetItem(ctx, input)
+	if err != nil {
+		s.logger.ErrorContext(
+			ctx,
+			"[DynamoDbStore] Failed to get item from DynamoDb",
+			slog.String("module", "dynamodb_store"),
+			slog.String("tableName", tableName),
+			slog.String("fieldName", fieldName),
+			slog.String("fieldValue", fieldValue),
+			slog.Any("error", err),
+		)
+
+		return false, fmt.Errorf("dynamodb.GetItem failed for item: %w", err)
+	}
+
+	if result.Item == nil {
+		return false, nil
+	}
+
+	err = attributevalue.UnmarshalMap(result.Item, &out)
+	if err != nil {
+		s.logger.ErrorContext(
+			ctx,
+			"[DynamoDbStore] Failed to unmarshal item from DynamoDb for task status",
+			"module", "dynamodb_store",
+			slog.String("tableName", tableName),
+			slog.String("fieldName", fieldName),
+			slog.String("fieldValue", fieldValue),
+			slog.Any("item", result.Item),
+			slog.Any("error", err),
+		)
+
+		return false, fmt.Errorf("attributevalue.UnmarshalMap failed for task status: %w", err)
+	}
+
+	return true, nil
+}
+
+func (s *Store) PutItem(ctx context.Context, tableName string, item any) error {
+	s.logger.DebugContext(
+		ctx,
+		"[DynamoDbStore] Putting item",
+		slog.String("module", "dynamodb_store"),
+		slog.String("tableName", tableName),
+	)
+
+	itemMap, err := attributevalue.MarshalMap(item)
+	if err != nil {
+		s.logger.ErrorContext(
+			ctx,
+			"[DynamoDbStore] Failed to marshal item to DynamoDb",
+			slog.String("module", "dynamodb_store"),
+			slog.String("tableName", tableName),
+			slog.Any("item", item),
+			slog.Any("error", err),
+		)
+
+		return fmt.Errorf("attributevalue.MarshalMap failed for item: %w", err)
+	}
+
+	input := &dynamodb.PutItemInput{
+		TableName: aws.String(tableName),
+		Item:      itemMap,
+	}
+
+	_, err = s.client.PutItem(ctx, input)
+	if err != nil {
+		s.logger.ErrorContext(
+			ctx,
+			"[DynamoDbStore] Failed to put item in DynamoDb",
+			slog.String("module", "dynamodb_store"),
+			slog.String("tableName", tableName),
+			slog.Any("item", item),
+			slog.Any("error", err),
+		)
+
+		return fmt.Errorf("dynamodb.PutItem failed for item: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) DeleteItem(ctx context.Context, tableName string, fieldName string, fieldValue string) error {
+	s.logger.DebugContext(
+		ctx,
+		"[DynamoDbStore] Deleting item",
+		slog.String("module", "dynamodb_store"),
+		slog.String("tableName", tableName),
+		slog.String("fieldName", fieldName),
+		slog.String("fieldValue", fieldValue),
+	)
+
+	key := map[string]types.AttributeValue{
+		fieldName: &types.AttributeValueMemberS{Value: fieldValue},
+	}
+
+	input := &dynamodb.DeleteItemInput{
+		TableName: aws.String(tableName),
+		Key:       key,
+	}
+
+	_, err := s.client.DeleteItem(ctx, input)
+	if err != nil {
+		s.logger.ErrorContext(
+			ctx,
+			"[DynamoDbStore] Failed to delete item from DynamoDb",
+			slog.String("module", "dynamodb_store"),
+			slog.String("tableName", tableName),
+			slog.String("fieldName", fieldName),
+			slog.String("fieldValue", fieldValue),
+			slog.Any("error", err),
+		)
+
+		return fmt.Errorf("dynamodb.DeleteItem failed for item: %w", err)
+	}
+
 	return nil
 }

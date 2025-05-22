@@ -14,6 +14,7 @@ import (
 	"github.com/eser/bfo/pkg/api/adapters/dynamodb_store"
 	"github.com/eser/bfo/pkg/api/adapters/providers"
 	"github.com/eser/bfo/pkg/api/adapters/sqs_queue"
+	"github.com/eser/bfo/pkg/api/adapters/storage"
 	"github.com/eser/bfo/pkg/api/business/resources"
 	"github.com/eser/bfo/pkg/api/business/tasks"
 )
@@ -29,8 +30,9 @@ type AppContext struct {
 	DynamoDbStore *dynamodb_store.Store
 	SqsQueue      *sqs_queue.Queue
 
-	Resources *resources.Service
-	Tasks     *tasks.Service
+	Repository *storage.Repository
+	Resources  *resources.Service
+	Tasks      *tasks.Service
 }
 
 func NewAppContext() *AppContext {
@@ -136,6 +138,33 @@ func (a *AppContext) Init(ctx context.Context) error { //nolint:lll
 	}
 
 	// ----------------------------------------------------
+	// Repository
+	// ----------------------------------------------------
+	a.Logger.DebugContext(
+		ctx,
+		"[AppContext] Initializing repository",
+		slog.String("module", "appcontext"),
+	)
+
+	a.Repository = storage.NewRepository(
+		a.Logger,
+		a.DynamoDbStore,
+		a.SqsQueue,
+	)
+
+	err = a.Repository.Init(ctx)
+	if err != nil {
+		a.Logger.ErrorContext(
+			ctx,
+			"[AppContext] Failed to initialize repository",
+			slog.String("module", "appcontext"),
+			slog.Any("error", err),
+		)
+
+		return fmt.Errorf("%w: %w", ErrInitFailed, err)
+	}
+
+	// ----------------------------------------------------
 	// Resources
 	// ----------------------------------------------------
 	a.Logger.DebugContext(
@@ -147,7 +176,7 @@ func (a *AppContext) Init(ctx context.Context) error { //nolint:lll
 	a.Resources = resources.NewService(
 		&a.Config.Resources,
 		a.Logger,
-		a.DynamoDbStore,
+		a.Repository,
 	)
 
 	a.Resources.AddProvider(
@@ -188,8 +217,7 @@ func (a *AppContext) Init(ctx context.Context) error { //nolint:lll
 	a.Tasks = tasks.NewService(
 		&a.Config.Tasks,
 		a.Logger,
-		a.SqsQueue,
-		a.DynamoDbStore,
+		a.Repository,
 	)
 
 	err = a.Tasks.Init(*taskQueueUrl)
@@ -208,7 +236,7 @@ func (a *AppContext) Init(ctx context.Context) error { //nolint:lll
 }
 
 func (a *AppContext) Tick(ctx context.Context) error {
-	processFn := func(innerCtx context.Context, task tasks.Task) (tasks.TaskResult, error) {
+	processFn := func(innerCtx context.Context, task *tasks.Task) (tasks.TaskResult, error) {
 		taskResult, err := a.Resources.TryProcessTask(innerCtx, task)
 
 		if err != nil {

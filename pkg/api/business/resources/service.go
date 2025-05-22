@@ -8,27 +8,34 @@ import (
 
 	"github.com/eser/ajan/logfx"
 	"github.com/eser/bfo/pkg/api/business/tasks"
-	"github.com/oklog/ulid/v2" // For generating task Ids
+	"github.com/oklog/ulid/v2"
 )
 
 type ProviderFn = func(config *ConfigResource) Provider
 
+type Repository interface {
+	GetResourceInstanceState(ctx context.Context, resourceInstanceId string) (*ResourceInstanceState, error)
+	PutResourceInstanceState(ctx context.Context, state *ResourceInstanceState) error
+}
+
 type Service struct {
-	config          *Config
-	logger          *logfx.Logger
+	config     *Config
+	logger     *logfx.Logger
+	repository Repository
+
 	providers       map[string]ProviderFn
 	resources       map[string]Provider       // map of resource_key to Provider instance
-	resourceStates  ResourceStateStore        // Store for ResourceInstanceState
 	resourceConfigs map[string]ConfigResource // map of resource_key to its config
 }
 
-func NewService(config *Config, logger *logfx.Logger, resourceStateStore ResourceStateStore) *Service {
+func NewService(config *Config, logger *logfx.Logger, repository Repository) *Service {
 	return &Service{
-		config:          config,
-		logger:          logger,
+		config:     config,
+		logger:     logger,
+		repository: repository,
+
 		providers:       make(map[string]ProviderFn),
 		resources:       make(map[string]Provider),
-		resourceStates:  resourceStateStore,
 		resourceConfigs: make(map[string]ConfigResource),
 	}
 }
@@ -57,7 +64,7 @@ func (s *Service) AddResource(key string, config ConfigResource) error {
 	s.logger.Debug("[Resources] Resource added", "module", "resources", "key", key, "config", config)
 
 	// Initialize resource state if not present
-	_, err := s.resourceStates.GetResourceInstanceState(context.Background(), key) // Using key as ResourceInstanceId for simplicity
+	_, err := s.repository.GetResourceInstanceState(context.Background(), key) // Using key as ResourceInstanceId for simplicity
 	if err != nil {
 		// Assuming error means not found, create a new state
 		// In a real scenario, you'd check the specific error type (e.g., worker_pool_store.ErrStateNotFound)
@@ -72,7 +79,7 @@ func (s *Service) AddResource(key string, config ConfigResource) error {
 			MaxTokensPerBatch:    1000, // Assuming this field exists in ConfigResource
 			Version:              1,
 		}
-		err = s.resourceStates.PutResourceInstanceState(context.Background(), initialState)
+		err = s.repository.PutResourceInstanceState(context.Background(), initialState)
 		if err != nil {
 			s.logger.Error("[Resources] Failed to initialize resource state", "key", key, "error", err)
 			return fmt.Errorf("failed to initialize resource state for %s: %w", key, err)
@@ -101,7 +108,7 @@ func (s *Service) Init() error {
 
 // estimateTokens estimates the number of tokens for a given task.
 // This is a placeholder and should be replaced with a more accurate tokenizer.
-func (s *Service) estimateTokens(task tasks.Task) int {
+func (s *Service) estimateTokens(task *tasks.Task) int {
 	// Simple estimation: sum of characters in messages / 4 (common rough estimate)
 	// For a robust solution, use a proper tokenizer library specific to the LLM provider.
 	// e.g., for OpenAI: https://github.com/tiktoken-go/tiktoken-go
@@ -114,7 +121,7 @@ func (s *Service) estimateTokens(task tasks.Task) int {
 	return estimated
 }
 
-func (s *Service) FindBestAvailableResource(ctx context.Context, task tasks.Task) (Provider, string, error) {
+func (s *Service) FindBestAvailableResource(ctx context.Context, task *tasks.Task) (Provider, string, error) {
 	s.logger.DebugContext(ctx, "[Resources] Finding best available resource", "module", "resources", "task_id", task.Id)
 
 	estimatedTokensForTask := s.estimateTokens(task) // Use the new estimateTokens method
@@ -130,7 +137,7 @@ func (s *Service) FindBestAvailableResource(ctx context.Context, task tasks.Task
 	for key, resource := range s.resources {
 		s.logger.DebugContext(ctx, "[Resources] Checking resource", "module", "resources", "resource_key", key)
 
-		resourceState, err := s.resourceStates.GetResourceInstanceState(ctx, key)
+		resourceState, err := s.repository.GetResourceInstanceState(ctx, key)
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[Resources] Failed to get resource state", "resource_key", key, "error", err)
 			continue // Skip this resource if we can't get its state
@@ -173,7 +180,7 @@ func (s *Service) FindBestAvailableResource(ctx context.Context, task tasks.Task
 	return bestResource, bestResourceKey, nil
 }
 
-func (s *Service) DispatchTask(ctx context.Context, resourceKey string, provider Provider, task tasks.Task) (*Batch, error) {
+func (s *Service) DispatchTask(ctx context.Context, resourceKey string, provider Provider, task *tasks.Task) (*Batch, error) {
 	// 1. Prepare the batch input file (this is a simplified representation)
 	// In a real scenario, you'd create a JSONL file with multiple task requests if batching multiple LLM calls.
 	// For a single task dispatch, the input file might contain just that one task's data formatted for the provider.
@@ -224,7 +231,7 @@ func (s *Service) DispatchTask(ctx context.Context, resourceKey string, provider
 	}
 
 	// 2. Optimistically update resource state (before making the call)
-	currentState, err := s.resourceStates.GetResourceInstanceState(ctx, resourceKey)
+	currentState, err := s.repository.GetResourceInstanceState(ctx, resourceKey)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[Resources] Failed to get resource state before dispatch", "resource_key", resourceKey, "error", err)
 		return nil, fmt.Errorf("failed to get resource state for %s: %w", resourceKey, err)
@@ -236,7 +243,7 @@ func (s *Service) DispatchTask(ctx context.Context, resourceKey string, provider
 	currentState.LastActivityTime = time.Now().Unix()
 	currentState.Version = newVersion
 
-	err = s.resourceStates.PutResourceInstanceState(ctx, currentState) // This should ideally use the version for optimistic lock
+	err = s.repository.PutResourceInstanceState(ctx, currentState) // This should ideally use the version for optimistic lock
 	if err != nil {
 		s.logger.ErrorContext(ctx, "[Resources] Failed to update resource state before dispatch (optimistic lock might fail here)", "resource_key", resourceKey, "error", err)
 		// TODO(@eser) Implement retry logic for optimistic locking failures if PutResourceInstanceState supports it.
@@ -254,7 +261,7 @@ func (s *Service) DispatchTask(ctx context.Context, resourceKey string, provider
 		// No need to change LastActivityTime, an activity did occur.
 		// Version increment for this rollback attempt.
 		currentState.Version++
-		rollbackErr := s.resourceStates.PutResourceInstanceState(ctx, currentState)
+		rollbackErr := s.repository.PutResourceInstanceState(ctx, currentState)
 		if rollbackErr != nil {
 			s.logger.ErrorContext(ctx, "[Resources] CRITICAL: Failed to roll back resource state after batch creation failure", "resource_key", resourceKey, "error", rollbackErr)
 			// This is a critical situation. The state in DB might be inconsistent.
@@ -272,7 +279,7 @@ func (s *Service) DispatchTask(ctx context.Context, resourceKey string, provider
 
 // Helper function to convert messages to JSON string for the batch body
 // This is a simplified version. Error handling should be more robust.
-func convertMessagesToJSON(messages []tasks.Message) string {
+func convertMessagesToJSON(messages []tasks.TaskMessage) string {
 	// In a real implementation, ensure this matches the exact structure expected by the LLM's batch API.
 	// This might involve creating a temporary struct that mirrors the LLM API's message format.
 	type BatchMessage struct {
@@ -293,7 +300,7 @@ func convertMessagesToJSON(messages []tasks.Message) string {
 	return string(mjson)
 }
 
-func (s *Service) TryProcessTask(ctx context.Context, task tasks.Task) (tasks.TaskResult, error) {
+func (s *Service) TryProcessTask(ctx context.Context, task *tasks.Task) (tasks.TaskResult, error) {
 	s.logger.DebugContext(ctx, "[Resources] Processing task", "module", "resources", "task_id", task.Id)
 
 	// Generate a unique Id for the task if it doesn't have one
@@ -301,8 +308,8 @@ func (s *Service) TryProcessTask(ctx context.Context, task tasks.Task) (tasks.Ta
 		task.Id = ulid.Make().String()
 		s.logger.InfoContext(ctx, "[Resources] Generated new Id for task", "task_id", task.Id)
 	}
-	if task.CreatedAt == 0 {
-		task.CreatedAt = time.Now().Unix()
+	if task.CreatedAt.IsZero() {
+		task.CreatedAt = time.Now()
 	}
 
 	// 1. Find the best available resource

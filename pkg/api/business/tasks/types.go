@@ -1,23 +1,53 @@
 package tasks
 
 import (
-	"context"
-	"errors" // Added import for errors package
+	"errors"
+	"time"
 )
 
-type Message struct {
+// ErrTaskStatusNotFound is returned when a task status is not found in the store.
+var ErrTaskStatusNotFound = errors.New("task status not found")
+
+type TaskBucketRetryPolicy struct {
+	MaxAttempts int `json:"max_attempts"`
+}
+
+type TaskBucketHooks struct {
+	Result  string `json:"result"`
+	Refresh string `json:"refresh"`
+}
+
+type TaskBucket struct {
+	Hooks TaskBucketHooks `json:"hooks"`
+	Id    string          `json:"id,omitempty"`
+
+	DefaultPriority int           `json:"default_priority,omitempty"`
+	DefaultSla      time.Duration `json:"default_sla,omitempty"`
+
+	RetryPolicy TaskBucketRetryPolicy `json:"retry_policy"`
+}
+
+type TaskMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
 type Task struct {
-	Id                   string    `json:"id,omitempty"`
-	Messages             []Message `json:"messages"`
-	MaxTokens            int       `json:"max_tokens,omitempty"`             // Max tokens for the output
-	EstimatedInputTokens int       `json:"estimated_input_tokens,omitempty"` // Estimated tokens for the input messages
-	Priority             int       `json:"priority,omitempty"`               // Task priority (e.g., 0 = highest)
-	CreatedAt            int64     `json:"created_at,omitempty"`             // Unix timestamp
-	// Add other fields like UserId, RequestId, etc. if needed for tracking/billing
+	CreatedAt time.Time `json:"created_at"`
+	Id        string    `json:"id,omitempty"`
+
+	Messages []TaskMessage `json:"messages"`
+
+	Priority int           `json:"priority,omitempty"`
+	Sla      time.Duration `json:"sla,omitempty"`
+
+	MaxTokens            int `json:"max_tokens,omitempty"`
+	EstimatedInputTokens int `json:"estimated_input_tokens,omitempty"`
+}
+
+type TaskWithReceipt struct {
+	Task          *Task  `json:"task"`
+	ReceiptHandle string `json:"receipt_handle"`
 }
 
 // TaskStatus represents the status of a task in its lifecycle.
@@ -34,15 +64,3 @@ type TaskStatus struct {
 	UpdatedAt          int64  `json:"updated_at" dynamodbav:"UpdatedAt"`
 	Version            int    `json:"version" dynamodbav:"Version"` // For optimistic locking
 }
-
-// TaskStatusStore is the interface for storing and retrieving task statuses.
-// This would be a new store, similar to ResourceInstanceStateStore.
-type TaskStatusStore interface {
-	GetTaskStatus(ctx context.Context, taskId string) (*TaskStatus, error)
-	PutTaskStatus(ctx context.Context, status *TaskStatus) error
-	UpdateTaskStatus(ctx context.Context, taskId string, updates map[string]any) error // For partial updates
-	// Potentially methods for querying tasks by status, resource, etc.
-}
-
-// ErrTaskStatusNotFound is returned when a task status is not found in the store.
-var ErrTaskStatusNotFound = errors.New("task status not found") // Added error definition
