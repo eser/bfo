@@ -42,6 +42,7 @@ services:
     restart: unless-stopped
     environment:
       SERVICES: sqs,dynamodb
+      DYNAMODB_SHARE_DB: 1
       DEBUG: 1
       DOCKER_HOST: unix:///var/run/docker.sock
     volumes:

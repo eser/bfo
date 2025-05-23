@@ -1,4 +1,4 @@
-package storage
+package repository
 
 import (
 	"context"
@@ -17,7 +17,7 @@ var (
 	ErrFailedToDeleteMessage   = errors.New("failed to delete message from task queue")
 )
 
-func (r *Repository) EnqueueTask(ctx context.Context, queueUrl string, task tasks.Task) error {
+func (r *Repository) EnqueueTask(ctx context.Context, queueUrl string, task *tasks.Task) error {
 	// marshal task to json
 	taskJSON, err := json.Marshal(task)
 	if err != nil {

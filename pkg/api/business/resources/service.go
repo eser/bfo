@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
+	"github.com/eser/ajan/lib"
 	"github.com/eser/ajan/logfx"
 	"github.com/eser/bfo/pkg/api/business/tasks"
-	"github.com/oklog/ulid/v2"
 )
 
 type ProviderFn = func(config *ConfigResource) Provider
@@ -40,15 +41,27 @@ func NewService(config *Config, logger *logfx.Logger, repository Repository) *Se
 	}
 }
 
-func (s *Service) AddProvider(key string, providerFn ProviderFn) {
+func (s *Service) AddProvider(ctx context.Context, key string, providerFn ProviderFn) {
 	s.providers[key] = providerFn
 
-	s.logger.Debug("[Resources] Provider added", "module", "resources", "key", key)
+	s.logger.DebugContext(
+		ctx,
+		"[Resources] Provider added",
+		slog.String("module", "resources"),
+		slog.String("key", key),
+	)
+
 }
 
-func (s *Service) AddResource(key string, config ConfigResource) error {
+func (s *Service) AddResource(ctx context.Context, key string, config ConfigResource) error {
 	if config.Disabled {
-		s.logger.Debug("[Resources] Resource is disabled, skipping...", "module", "resources", "key", key, "config", config)
+		s.logger.DebugContext(
+			ctx,
+			"[Resources] Resource is disabled, skipping...",
+			slog.String("module", "resources"),
+			slog.String("key", key),
+			slog.Any("config", config),
+		)
 
 		return nil
 	}
@@ -61,7 +74,13 @@ func (s *Service) AddResource(key string, config ConfigResource) error {
 	s.resources[key] = providerFn(&config)
 	s.resourceConfigs[key] = config // Store the config for later use
 
-	s.logger.Debug("[Resources] Resource added", "module", "resources", "key", key, "config", config)
+	s.logger.DebugContext(
+		ctx,
+		"[Resources] Resource added",
+		slog.String("module", "resources"),
+		slog.String("key", key),
+		slog.Any("config", config),
+	)
 
 	// Initialize resource state if not present
 	_, err := s.repository.GetResourceInstanceState(context.Background(), key) // Using key as ResourceInstanceId for simplicity
@@ -71,7 +90,7 @@ func (s *Service) AddResource(key string, config ConfigResource) error {
 		initialState := &ResourceInstanceState{
 			ResourceInstanceId:   key,
 			ProviderName:         config.Provider,
-			LastActivityTime:     time.Now().Unix(),
+			LastActivityTime:     time.Now(),
 			CurrentTokenLoad:     0,
 			ActiveBatches:        0,
 			MaxConcurrentBatches: 8,    // Corrected to use MaxConcurrency
@@ -79,29 +98,39 @@ func (s *Service) AddResource(key string, config ConfigResource) error {
 			MaxTokensPerBatch:    1000, // Assuming this field exists in ConfigResource
 			Version:              1,
 		}
+
 		err = s.repository.PutResourceInstanceState(context.Background(), initialState)
 		if err != nil {
 			s.logger.Error("[Resources] Failed to initialize resource state", "key", key, "error", err)
 			return fmt.Errorf("failed to initialize resource state for %s: %w", key, err)
 		}
+
 		s.logger.Info("[Resources] Initialized resource state", "key", key)
 	}
 
 	return nil
 }
 
-func (s *Service) Init() error {
-	s.logger.Debug("[Resources] Loading resources from config", "module", "resources")
+func (s *Service) Init(ctx context.Context) error {
+	s.logger.DebugContext(
+		ctx,
+		"[Resources] Loading resources from config",
+		slog.String("module", "resources"),
+	)
 
 	for key, resourceConfig := range *s.config {
-		err := s.AddResource(key, resourceConfig)
+		err := s.AddResource(ctx, key, resourceConfig)
 
 		if err != nil {
 			return err
 		}
 	}
 
-	s.logger.Debug("[Resources] Resources loaded from config", "module", "resources")
+	s.logger.DebugContext(
+		ctx,
+		"[Resources] Resources loaded from config",
+		slog.String("module", "resources"),
+	)
 
 	return nil
 }
@@ -240,7 +269,7 @@ func (s *Service) DispatchTask(ctx context.Context, resourceKey string, provider
 	newVersion := currentState.Version + 1
 	currentState.ActiveBatches++
 	currentState.CurrentTokenLoad += int64(task.EstimatedInputTokens + task.MaxTokens) // Add estimated total tokens for the batch
-	currentState.LastActivityTime = time.Now().Unix()
+	currentState.LastActivityTime = time.Now()
 	currentState.Version = newVersion
 
 	err = s.repository.PutResourceInstanceState(ctx, currentState) // This should ideally use the version for optimistic lock
@@ -305,7 +334,7 @@ func (s *Service) TryProcessTask(ctx context.Context, task *tasks.Task) (tasks.T
 
 	// Generate a unique Id for the task if it doesn't have one
 	if task.Id == "" {
-		task.Id = ulid.Make().String()
+		task.Id = lib.IdsGenerateUnique()
 		s.logger.InfoContext(ctx, "[Resources] Generated new Id for task", "task_id", task.Id)
 	}
 	if task.CreatedAt.IsZero() {
@@ -340,8 +369,8 @@ func (s *Service) TryProcessTask(ctx context.Context, task *tasks.Task) (tasks.T
 	// 	Status:             "in_progress", // Or "submitted_to_batch"
 	// 	ResourceInstanceId: resourceKey,
 	// 	BatchId:            batch.Id,
-	// 	CreatedAt:          task.CreatedAt, // Or time.Now().Unix() if not set
-	// 	UpdatedAt:          time.Now().Unix(),
+	// 	CreatedAt:          task.CreatedAt, // Or time.Now() if not set
+	// 	UpdatedAt:          time.Now(),
 	// 	Version:            1,
 	// }
 	// err = s.taskStatusStore.PutTaskStatus(ctx, taskStatus) // Assuming s.taskStatusStore is initialized

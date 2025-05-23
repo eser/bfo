@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/eser/ajan/lib"
 	"github.com/eser/ajan/logfx"
-	"github.com/oklog/ulid/v2"
 )
 
 var (
@@ -33,9 +33,11 @@ type Repository interface {
 	GetTaskStatus(ctx context.Context, taskId string) (*TaskStatus, error)
 	PutTaskStatus(ctx context.Context, status *TaskStatus) error
 	UpdateTaskStatus(ctx context.Context, taskId string, updates map[string]any) error // For partial updates
-	EnqueueTask(ctx context.Context, queueUrl string, task Task) error
+	EnqueueTask(ctx context.Context, queueUrl string, task *Task) error
 	PickTaskFromQueue(ctx context.Context, queueUrl string) ([]TaskWithReceipt, error)
 	DeleteTaskFromQueue(ctx context.Context, queueUrl string, receiptHandle string) error
+
+	UpsertTaskBucket(ctx context.Context, item *TaskBucket) error
 }
 
 type ServiceContext struct {
@@ -59,15 +61,43 @@ func (s *Service) Init(taskQueueUrl string) error {
 	return nil
 }
 
-func (s *Service) DispatchTask(ctx context.Context, task Task) error {
+func (s *Service) UpdateTaskBucket(ctx context.Context, taskBucket *TaskBucket) error {
+	if s.Context == nil {
+		return ErrDispatchTaskBeforeInit
+	}
+
+	if taskBucket.Id == "" {
+		return fmt.Errorf("task bucket id cannot be empty")
+	}
+
+	if taskBucket == nil {
+		return fmt.Errorf("task bucket cannot be nil")
+	}
+
+	s.logger.DebugContext(ctx, "[Tasks] Updating task bucket", "module", "tasks", "task_bucket_id", taskBucket.Id)
+
+	err := s.repository.UpsertTaskBucket(ctx, taskBucket)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "[Tasks] Failed to update task bucket", "module", "tasks", "task_bucket_id", taskBucket.Id, "error", err)
+
+		return fmt.Errorf("failed to update task bucket: %w", err)
+	}
+
+	s.logger.InfoContext(ctx, "[Tasks] Successfully updated task bucket", "module", "tasks", "task_bucket_id", taskBucket.Id)
+
+	return nil
+}
+
+func (s *Service) DispatchTask(ctx context.Context, task *Task) error {
 	if s.Context == nil {
 		return ErrDispatchTaskBeforeInit
 	}
 
 	// Generate Id and Timestamp if not present
 	if task.Id == "" {
-		task.Id = ulid.Make().String()
+		task.Id = lib.IdsGenerateUnique()
 	}
+
 	if task.CreatedAt.IsZero() {
 		task.CreatedAt = time.Now()
 	}
@@ -82,8 +112,8 @@ func (s *Service) DispatchTask(ctx context.Context, task Task) error {
 	initialStatus := &TaskStatus{
 		TaskId:    task.Id,
 		Status:    "pending_queue", // Indicates it's about to be queued
-		CreatedAt: task.CreatedAt.Unix(),
-		UpdatedAt: time.Now().Unix(),
+		CreatedAt: task.CreatedAt,
+		UpdatedAt: time.Now(),
 		Version:   1,
 	}
 
@@ -117,7 +147,7 @@ func (s *Service) PickUpNextAvailableTask(ctx context.Context, processFn func(ct
 		// Update task status to "in_progress"
 		err = s.repository.UpdateTaskStatus(ctx, record.Task.Id, map[string]any{
 			"Status":    "in_progress_worker",
-			"UpdatedAt": time.Now().Unix(),
+			"UpdatedAt": time.Now(),
 		})
 		if err != nil {
 			s.logger.ErrorContext(ctx, "[Tasks] Failed to update task status to in_progress_worker", "task_id", record.Task.Id, "error", err)
@@ -132,7 +162,7 @@ func (s *Service) PickUpNextAvailableTask(ctx context.Context, processFn func(ct
 		// The status update here is more about the SQS message handling outcome.
 
 		finalStatusUpdate := map[string]any{
-			"UpdatedAt": time.Now().Unix(),
+			"UpdatedAt": time.Now(),
 		}
 
 		if processErr != nil {

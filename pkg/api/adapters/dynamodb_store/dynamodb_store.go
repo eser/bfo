@@ -86,6 +86,7 @@ func (s *Store) EnsureTableExists(ctx context.Context, tableName string, primary
 
 	if err != nil {
 		var notFoundEx *types.ResourceNotFoundException
+
 		if errors.As(err, &notFoundEx) {
 			s.logger.InfoContext(
 				ctx,
@@ -186,6 +187,47 @@ func (s *Store) createTable(ctx context.Context, tableName string, primaryKeyAtt
 	return nil
 }
 
+func (s *Store) ListItems(ctx context.Context, tableName string, out any) error {
+	s.logger.DebugContext(
+		ctx,
+		"[DynamoDbStore] Listing items",
+		slog.String("module", "dynamodb_store"),
+		slog.String("tableName", tableName),
+	)
+
+	input := &dynamodb.ScanInput{
+		TableName: aws.String(tableName),
+	}
+
+	result, err := s.client.Scan(ctx, input)
+	if err != nil {
+		s.logger.ErrorContext(
+			ctx,
+			"[DynamoDbStore] Failed to list items from DynamoDb",
+			slog.String("module", "dynamodb_store"),
+			slog.String("tableName", tableName),
+			slog.Any("error", err),
+		)
+
+		return fmt.Errorf("dynamodb.Scan failed for table %s: %w", tableName, err)
+	}
+
+	err = attributevalue.UnmarshalListOfMaps(result.Items, &out)
+	if err != nil {
+		s.logger.ErrorContext(
+			ctx,
+			"[DynamoDbStore] Failed to unmarshal items from DynamoDb",
+			slog.String("module", "dynamodb_store"),
+			slog.String("tableName", tableName),
+			slog.Any("error", err),
+		)
+
+		return fmt.Errorf("attributevalue.UnmarshalListOfMaps failed for table %s: %w", tableName, err)
+	}
+
+	return nil
+}
+
 func (s *Store) GetItem(ctx context.Context, tableName string, fieldName string, fieldValue string, out any) (bool, error) {
 	s.logger.DebugContext(
 		ctx,
@@ -209,7 +251,7 @@ func (s *Store) GetItem(ctx context.Context, tableName string, fieldName string,
 	if err != nil {
 		s.logger.ErrorContext(
 			ctx,
-			"[DynamoDbStore] Failed to get item from DynamoDb",
+			"[DynamoDbStore] Failed to get item",
 			slog.String("module", "dynamodb_store"),
 			slog.String("tableName", tableName),
 			slog.String("fieldName", fieldName),
@@ -228,7 +270,7 @@ func (s *Store) GetItem(ctx context.Context, tableName string, fieldName string,
 	if err != nil {
 		s.logger.ErrorContext(
 			ctx,
-			"[DynamoDbStore] Failed to unmarshal item from DynamoDb for task status",
+			"[DynamoDbStore] Failed to unmarshal item for getting item",
 			"module", "dynamodb_store",
 			slog.String("tableName", tableName),
 			slog.String("fieldName", fieldName),
@@ -237,25 +279,26 @@ func (s *Store) GetItem(ctx context.Context, tableName string, fieldName string,
 			slog.Any("error", err),
 		)
 
-		return false, fmt.Errorf("attributevalue.UnmarshalMap failed for task status: %w", err)
+		return false, fmt.Errorf("attributevalue.UnmarshalMap failed for getting item: %w", err)
 	}
 
 	return true, nil
 }
 
-func (s *Store) PutItem(ctx context.Context, tableName string, item any) error {
+func (s *Store) UpsertItem(ctx context.Context, tableName string, item any) error {
 	s.logger.DebugContext(
 		ctx,
-		"[DynamoDbStore] Putting item",
+		"[DynamoDbStore] Upserting item",
 		slog.String("module", "dynamodb_store"),
 		slog.String("tableName", tableName),
+		slog.Any("item", item),
 	)
 
-	itemMap, err := attributevalue.MarshalMap(item)
+	itemMap, err := attributevalue.MarshalMapWithOptions(item)
 	if err != nil {
 		s.logger.ErrorContext(
 			ctx,
-			"[DynamoDbStore] Failed to marshal item to DynamoDb",
+			"[DynamoDbStore] Failed to marshal item for upsert",
 			slog.String("module", "dynamodb_store"),
 			slog.String("tableName", tableName),
 			slog.Any("item", item),
@@ -268,21 +311,30 @@ func (s *Store) PutItem(ctx context.Context, tableName string, item any) error {
 	input := &dynamodb.PutItemInput{
 		TableName: aws.String(tableName),
 		Item:      itemMap,
+		// No ConditionExpression means it will upsert
 	}
 
 	_, err = s.client.PutItem(ctx, input)
 	if err != nil {
 		s.logger.ErrorContext(
 			ctx,
-			"[DynamoDbStore] Failed to put item in DynamoDb",
+			"[DynamoDbStore] Failed to upsert item in DynamoDb",
 			slog.String("module", "dynamodb_store"),
 			slog.String("tableName", tableName),
 			slog.Any("item", item),
 			slog.Any("error", err),
 		)
 
-		return fmt.Errorf("dynamodb.PutItem failed for item: %w", err)
+		return fmt.Errorf("dynamodb.PutItem failed for upsert: %w", err)
 	}
+
+	s.logger.DebugContext(
+		ctx,
+		"[DynamoDbStore] Successfully upserted item",
+		slog.String("module", "dynamodb_store"),
+		slog.String("tableName", tableName),
+		slog.Any("item", item),
+	)
 
 	return nil
 }

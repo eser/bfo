@@ -1,4 +1,4 @@
-package storage
+package repository
 
 import (
 	"context"
@@ -24,7 +24,7 @@ type Repository struct {
 	sqsQueue      *sqs_queue.Queue
 }
 
-func NewRepository(logger *logfx.Logger, dynamoDbStore *dynamodb_store.Store, sqsQueue *sqs_queue.Queue) *Repository {
+func New(logger *logfx.Logger, dynamoDbStore *dynamodb_store.Store, sqsQueue *sqs_queue.Queue) *Repository {
 	return &Repository{
 		logger:        logger,
 		dynamoDbStore: dynamoDbStore,
@@ -49,11 +49,15 @@ func (r *Repository) ensureDynamoDbExists(ctx context.Context, tableName string,
 }
 
 func (r *Repository) Init(ctx context.Context) error {
-	if err := r.ensureDynamoDbExists(ctx, TaskStatusTableName, TaskStatusTablePK); err != nil {
-		return err
-	}
+	// if err := r.ensureDynamoDbExists(ctx, TaskStatusTableName, TaskStatusTablePK); err != nil {
+	// 	return err
+	// }
 
-	if err := r.ensureDynamoDbExists(ctx, ResourceStateTableName, ResourceStateTablePK); err != nil {
+	// if err := r.ensureDynamoDbExists(ctx, ResourceStateTableName, ResourceStateTablePK); err != nil {
+	// 	return err
+	// }
+
+	if err := r.ensureDynamoDbExists(ctx, TaskBucketTableName, TaskBucketTablePK); err != nil {
 		return err
 	}
 

@@ -37,7 +37,8 @@ func Run(
 	profiling.RegisterHttpRoutes(routes, &appContext.Config.Http)
 
 	// http routes
-	RegisterHttpRoutesForSite(routes, appContext) //nolint:contextcheck
+	RegisterHttpRoutesForTaskBuckets(routes, appContext) //nolint:contextcheck
+	RegisterHttpRoutesForTasks(routes, appContext)       //nolint:contextcheck
 
 	// run
 	return httpService.Start(ctx)

@@ -1,4 +1,4 @@
-package storage
+package repository
 
 import (
 	"context"
@@ -31,7 +31,7 @@ func (r *Repository) GetTaskStatus(ctx context.Context, taskId string) (*tasks.T
 func (r *Repository) PutTaskStatus(ctx context.Context, status *tasks.TaskStatus) error {
 	r.logger.DebugContext(ctx, "[DynamoDbStore] Putting task status", "module", "dynamodb_store", "taskId", status.TaskId, "tableName", TaskStatusTableName)
 
-	err := r.dynamoDbStore.PutItem(ctx, TaskStatusTableName, status)
+	err := r.dynamoDbStore.UpsertItem(ctx, TaskStatusTableName, status)
 	if err != nil {
 		// Specific error logging is handled by the generic PutItem method.
 		return fmt.Errorf("failed to put task status: %w", err)
@@ -57,7 +57,7 @@ func (r *Repository) UpdateTaskStatus(ctx context.Context, taskId string, update
 
 	// 	// Ensure UpdatedAt is always part of the update
 	// 	if _, ok := updates["UpdatedAt"]; !ok {
-	// 		updates["UpdatedAt"] = time.Now().Unix()
+	// 		updates["UpdatedAt"] = time.Now()
 	// 	}
 
 	// 	i := 0

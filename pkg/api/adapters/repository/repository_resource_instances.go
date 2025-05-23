@@ -1,4 +1,4 @@
-package storage
+package repository
 
 import (
 	"context"
@@ -28,7 +28,7 @@ func (r *Repository) GetResourceInstanceState(ctx context.Context, resourceInsta
 func (r *Repository) PutResourceInstanceState(ctx context.Context, state *resources.ResourceInstanceState) error {
 	r.logger.DebugContext(ctx, "[DynamoDbStore] Putting resource instance state", "module", "dynamodb_store", "resourceInstanceId", state.ResourceInstanceId, "tableName", ResourceStateTableName)
 
-	err := r.dynamoDbStore.PutItem(ctx, ResourceStateTableName, state)
+	err := r.dynamoDbStore.UpsertItem(ctx, ResourceStateTableName, state)
 	if err != nil {
 		return fmt.Errorf("failed to put resource instance state: %w", err)
 	}

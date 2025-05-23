@@ -2,8 +2,8 @@ PUT http://localhost:8080/api/app-visibility-v1/schema
 Content-Type: application/json
 
 {
-  "default_priority": 5,
-  "default_sla_seconds": 43200,
+  "default_priority": 0,
+  "default_sla": 43200,
   "retry_policy": { "max_attempts": 3 },
   "hooks": {
     "result": "https://app/api/batch/result",
@@ -11,9 +11,9 @@ Content-Type: application/json
   }
 }
 
----
+###
 
-PUT http://localhost:8080/api/app-visibility-v1/tasks/12345
+PUT http://localhost:8080/api/app-visibility-v1/tasks/GPTTASK123
 Content-Type: application/json
 
 {
@@ -26,6 +26,6 @@ Content-Type: application/json
     { "role": "user", "content": "baz" }
   ],
 
-  "priority": 5,
-  "sla_seconds": 43200, // fallback to online mode if this one exists
+  "priority": 2,
+  "sla": 43200
 }

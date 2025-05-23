@@ -12,9 +12,8 @@ import (
 	"github.com/eser/ajan/metricsfx"
 
 	"github.com/eser/bfo/pkg/api/adapters/dynamodb_store"
-	"github.com/eser/bfo/pkg/api/adapters/providers"
+	"github.com/eser/bfo/pkg/api/adapters/repository"
 	"github.com/eser/bfo/pkg/api/adapters/sqs_queue"
-	"github.com/eser/bfo/pkg/api/adapters/storage"
 	"github.com/eser/bfo/pkg/api/business/resources"
 	"github.com/eser/bfo/pkg/api/business/tasks"
 )
@@ -30,7 +29,7 @@ type AppContext struct {
 	DynamoDbStore *dynamodb_store.Store
 	SqsQueue      *sqs_queue.Queue
 
-	Repository *storage.Repository
+	Repository *repository.Repository
 	Resources  *resources.Service
 	Tasks      *tasks.Service
 }
@@ -146,7 +145,7 @@ func (a *AppContext) Init(ctx context.Context) error { //nolint:lll
 		slog.String("module", "appcontext"),
 	)
 
-	a.Repository = storage.NewRepository(
+	a.Repository = repository.New(
 		a.Logger,
 		a.DynamoDbStore,
 		a.SqsQueue,
@@ -164,46 +163,48 @@ func (a *AppContext) Init(ctx context.Context) error { //nolint:lll
 		return fmt.Errorf("%w: %w", ErrInitFailed, err)
 	}
 
-	// ----------------------------------------------------
-	// Resources
-	// ----------------------------------------------------
-	a.Logger.DebugContext(
-		ctx,
-		"[AppContext] Initializing resources",
-		slog.String("module", "appcontext"),
-	)
+	// // ----------------------------------------------------
+	// // Resources
+	// // ----------------------------------------------------
+	// a.Logger.DebugContext(
+	// 	ctx,
+	// 	"[AppContext] Initializing resources",
+	// 	slog.String("module", "appcontext"),
+	// )
 
-	a.Resources = resources.NewService(
-		&a.Config.Resources,
-		a.Logger,
-		a.Repository,
-	)
+	// a.Resources = resources.NewService(
+	// 	&a.Config.Resources,
+	// 	a.Logger,
+	// 	a.Repository,
+	// )
 
-	a.Resources.AddProvider(
-		"openai",
-		func(config *resources.ConfigResource) resources.Provider {
-			return providers.NewOpenAiClient(config, a.Logger)
-		},
-	)
+	// a.Resources.AddProvider(
+	// 	ctx,
+	// 	"openai",
+	// 	func(config *resources.ConfigResource) resources.Provider {
+	// 		return providers.NewOpenAiClient(config, a.Logger)
+	// 	},
+	// )
 
-	a.Resources.AddProvider(
-		"echo",
-		func(config *resources.ConfigResource) resources.Provider {
-			return providers.NewEchoClient(config, a.Logger)
-		},
-	)
+	// a.Resources.AddProvider(
+	// 	ctx,
+	// 	"echo",
+	// 	func(config *resources.ConfigResource) resources.Provider {
+	// 		return providers.NewEchoClient(config, a.Logger)
+	// 	},
+	// )
 
-	err = a.Resources.Init()
-	if err != nil {
-		a.Logger.ErrorContext(
-			ctx,
-			"[AppContext] Failed to initialize resources",
-			slog.String("module", "appcontext"),
-			slog.Any("error", err),
-		)
+	// err = a.Resources.Init(ctx)
+	// if err != nil {
+	// 	a.Logger.ErrorContext(
+	// 		ctx,
+	// 		"[AppContext] Failed to initialize resources",
+	// 		slog.String("module", "appcontext"),
+	// 		slog.Any("error", err),
+	// 	)
 
-		return fmt.Errorf("%w: %w", ErrInitFailed, err)
-	}
+	// 	return fmt.Errorf("%w: %w", ErrInitFailed, err)
+	// }
 
 	// ----------------------------------------------------
 	// Tasks

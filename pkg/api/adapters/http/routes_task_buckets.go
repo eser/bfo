@@ -9,30 +9,28 @@ import (
 	"github.com/eser/bfo/pkg/api/business/tasks"
 )
 
-func RegisterHttpRoutesForTasks( //nolint:funlen
+func RegisterHttpRoutesForTaskBuckets( //nolint:funlen
 	routes *httpfx.Router,
 	appContext *appcontext.AppContext,
 ) {
 	routes.
 		Route(
-			"PUT /api/{bucket}/tasks/{id...}",
+			"PUT /api/{bucket}/schema",
 			func(ctx *httpfx.Context) httpfx.Result {
 				// get variables from path
 				bucketParam := ctx.Request.PathValue("bucket")
-				idParam := ctx.Request.PathValue("id")
 
 				// get body
-				var task tasks.Task
-				err := json.NewDecoder(ctx.Request.Body).Decode(&task)
+				var taskBucket tasks.TaskBucket
+				err := json.NewDecoder(ctx.Request.Body).Decode(&taskBucket)
 				if err != nil {
 					return ctx.Results.Error(http.StatusInternalServerError, []byte(err.Error()))
 				}
 
-				// override task id and bucket id
-				task.Id = idParam
-				task.BucketId = bucketParam
+				// override task bucket id
+				taskBucket.Id = bucketParam
 
-				err = appContext.Tasks.DispatchTask(ctx.Request.Context(), &task)
+				err = appContext.Tasks.UpdateTaskBucket(ctx.Request.Context(), &taskBucket)
 
 				if err != nil {
 					return ctx.Results.Error(http.StatusInternalServerError, []byte(err.Error()))
@@ -41,7 +39,7 @@ func RegisterHttpRoutesForTasks( //nolint:funlen
 				return ctx.Results.Ok()
 			},
 		).
-		HasSummary("Dispatch task").
-		HasDescription("Dispatch a task to the task service.").
+		HasSummary("Set task bucket's schema").
+		HasDescription("Set the schema for a task bucket.").
 		HasResponse(http.StatusOK)
 }
